@@ -199,11 +199,18 @@
     map.setView([25, -20], 2);
     map.attributionControl.setPrefix('<a href="https://leafletjs.com" target="_blank" rel="noopener">Leaflet</a>');
     const OSM = '© <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">OpenStreetMap</a>';
-    const CARTO = OSM + ' · © <a href="https://carto.com/attributions" target="_blank" rel="noopener">CARTO</a>';
-    const gris = estilo => L.tileLayer('https://{s}.basemaps.cartocdn.com/' + estilo + '/{z}/{x}/{y}{r}.png', { subdomains: 'abcd', maxZoom: 19, attribution: CARTO });
+    /* Fondos grises de Esri (Canvas): sin clave, con su capa de nombres encima */
+    const ESRI = 'https://server.arcgisonline.com/ArcGIS/rest/services/';
+    const gris = estilo => L.layerGroup([
+      L.tileLayer(ESRI + 'Canvas/World_' + estilo + '_Gray_Base/MapServer/tile/{z}/{y}/{x}', {
+        maxNativeZoom: 16, maxZoom: 19,
+        attribution: '© <a href="https://www.esri.com" target="_blank" rel="noopener">Esri</a>, HERE, Garmin · ' + OSM
+      }),
+      L.tileLayer(ESRI + 'Canvas/World_' + estilo + '_Gray_Reference/MapServer/tile/{z}/{y}/{x}', { maxNativeZoom: 16, maxZoom: 19 })
+    ]);
     const capas = {
-      oscuro: gris('dark_all'),
-      claro: gris('light_all'),
+      oscuro: gris('Dark'),
+      claro: gris('Light'),
       calle: L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 19, attribution: OSM }),
       satelite: L.layerGroup([
         L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', {

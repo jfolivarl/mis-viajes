@@ -51,4 +51,4 @@ Editar `viajes.js` (títulos, fechas, textos, coordenadas) y subir las fotos nue
 
 ## Mapa
 
-Leaflet con fondos grises de © CARTO, callejero de © OpenStreetMap y satélite de © Esri. Búsqueda con Photon y Nominatim (datos de OpenStreetMap).
+Leaflet con fondos grises y satélite de © Esri y callejero de © OpenStreetMap. Búsqueda con Photon y Nominatim (datos de OpenStreetMap).

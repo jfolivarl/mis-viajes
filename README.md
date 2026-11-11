@@ -9,10 +9,12 @@ Fichas, mapa y fotos de viajes. Web estática para GitHub Pages: https://jfoliva
 
 ## Copia de seguridad (importante)
 
-1. Botón de la nube (arriba) › **Guardar copia** › **Guardar en Archivos** › iCloud Drive.
-2. Para recuperarla, o pasarla a otro iPhone: botón de la nube › **Restaurar una copia** › elegir el zip.
+1. Botón de la nube (arriba) › **Descargar copia**: guarda un zip en el equipo (en el ordenador se puede elegir la carpeta; en el móvil va a Descargas). En el móvil también hay **Compartir copia**, para mandarla a Archivos, iCloud Drive o Google Drive.
+2. Para recuperarla, o pasarla a otro equipo: botón de la nube › **Restaurar una copia** › elegir el zip. En el ordenador también se puede arrastrar el zip sobre esa ventana. Si el equipo lo descomprimió solo, se pueden elegir todos sus archivos a la vez (`viajes.json` y las fotos).
 
-Si se borra la app de la pantalla de inicio o los datos de Safari, lo guardado se pierde: la copia es la única forma de recuperarlo. La app avisa cuando hay cambios sin copia.
+La copia es la misma en iPhone, Android y ordenador.
+
+Si se borra la app o los datos del navegador, lo guardado se pierde: la copia es la única forma de recuperarlo. La app avisa cuando hay cambios sin copia.
 
 ## Estructura (todo suelto en la raíz)
 
@@ -32,12 +34,15 @@ Si se borra la app de la pantalla de inicio o los datos de Safari, lo guardado s
 - **Viajes:** carrusel de fichas. El mapa enseña el viaje de la ficha que tienes delante. Al final, la ficha punteada **Añadir viaje**.
 - **Filtro del mapa** (embudo): elegir un viaje o verlos todos.
 - **Título de la ficha** o «N fotos y mapa»: abre el viaje con su galería.
+- **Ampliar una foto:** en el visor, con la lupa, doble toque, pellizco o la rueda del ratón; arrastra para moverla. Las fotos nuevas se guardan a 2560 px para que se vean nítidas.
 - **Editar:** Modificar la ficha, adjuntar imágenes o PDF (clip), añadir fotos, crear puntos, arrastrar marcadores.
 - **Añadir fotos:** Fototeca, cámara o Archivos. Para que lleven ubicación: Fotos › Compartir › Opciones › **Ubicación** › Guardar en Archivos, y elegirlas con Explorar. Las que no la tengan: abrirlas › **Colocar en el mapa**.
-- **Satélite:** botón de capas del mapa.
+- **Mapa base:** el botón de capas abre un menú con Gris oscuro (el de siempre), Gris claro, Callejero y Satélite.
+- La app es **siempre oscura**, tenga el dispositivo el modo que tenga.
+- En el ordenador el panel de la izquierda tiene su propio scroll y el carrusel lleva botones Anterior y Siguiente.
 - **Pantalla completa:** botón de las flechas hacia fuera; al tocar un viaje sale su ventana con la portada y el enlace a sus fotos. Se sale con el mismo botón o con Escape.
 - El mapa lleva **norte y escala** abajo a la izquierda.
-- **Buscar** (lupa): escribe una dirección o un lugar y pulsa Buscar. Al elegir un resultado aparece un marcador de ubicación; desde su ventana se añade como punto a un viaje (y ahí se le pone nombre, fecha, comentario y foto). Usa el buscador Nominatim de OpenStreetMap, así que necesita conexión.
+- **Buscar** (lupa): escribe una dirección o un lugar y pulsa Buscar. Al elegir un resultado aparece un marcador de ubicación; desde su ventana se añade como punto a un viaje (y ahí se le pone nombre, fecha, comentario y foto). Necesita conexión.
 - **Pasar un punto a otro viaje:** Editar punto › campo «Viaje».
 
 ## Cambiar los ejemplos
@@ -46,4 +51,4 @@ Editar `viajes.js` (títulos, fechas, textos, coordenadas) y subir las fotos nue
 
 ## Mapa
 
-Leaflet con © OpenStreetMap y satélite de © Esri.
+Leaflet con fondos grises de © CARTO, callejero de © OpenStreetMap y satélite de © Esri. Búsqueda con Photon y Nominatim (datos de OpenStreetMap).

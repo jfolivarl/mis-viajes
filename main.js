@@ -133,6 +133,7 @@
     hayMios = true;
     IDB.poner(CLAVE_DATOS, JSON.stringify(datos));
     LS.poner('pendiente', '1');
+    LS.poner('x-copia', null);
     pintarAviso();
   }
   function soltar(f) {
@@ -197,11 +198,13 @@
     const map = L.map(el, { zoomControl: false, worldCopyJump: true, minZoom: 2, maxZoom: 19, zoomSnap: 0.5, tapTolerance: 15 });
     map.setView([25, -20], 2);
     map.attributionControl.setPrefix('<a href="https://leafletjs.com" target="_blank" rel="noopener">Leaflet</a>');
+    const OSM = '© <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">OpenStreetMap</a>';
+    const CARTO = OSM + ' · © <a href="https://carto.com/attributions" target="_blank" rel="noopener">CARTO</a>';
+    const gris = estilo => L.tileLayer('https://{s}.basemaps.cartocdn.com/' + estilo + '/{z}/{x}/{y}{r}.png', { subdomains: 'abcd', maxZoom: 19, attribution: CARTO });
     const capas = {
-      mapa: L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {
-        maxZoom: 19,
-        attribution: '© <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">OpenStreetMap</a>'
-      }),
+      oscuro: gris('dark_all'),
+      claro: gris('light_all'),
+      calle: L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 19, attribution: OSM }),
       satelite: L.layerGroup([
         L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', {
           maxZoom: 19,
@@ -210,9 +213,17 @@
         L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/Reference/World_Boundaries_and_Places/MapServer/tile/{z}/{y}/{x}', { maxZoom: 19 })
       ])
     };
-    let base = 'mapa';
-    try { if (localStorage.getItem('mis-viajes.capa') === 'satelite') base = 'satelite'; } catch (e) { /* sin almacenamiento */ }
-    capas[base].addTo(map);
+    const NOMBRES = { oscuro: 'Gris oscuro', claro: 'Gris claro', calle: 'Callejero', satelite: 'Satélite' };
+    let base = 'oscuro'; /* el fondo gris oscuro no compite con las fotos */
+    try { const g = localStorage.getItem('mis-viajes.capa'); if (capas[g]) base = g; } catch (e) { /* sin almacenamiento */ }
+    const ponerBase = k => {
+      if (capas[base]) map.removeLayer(capas[base]);
+      base = k;
+      capas[base].addTo(map);
+      el.classList.toggle('base-osc', base === 'oscuro' || base === 'satelite');
+      try { localStorage.setItem('mis-viajes.capa', base); } catch (e) { /* sin almacenamiento */ }
+    };
+    ponerBase(base);
 
     const izq = L.DomUtil.create('div', 'm-ctrl m-izq', el);
     izq.innerHTML =
@@ -223,7 +234,7 @@
     const ctrl = L.DomUtil.create('div', 'm-ctrl', el);
     ctrl.innerHTML =
       '<button type="button" data-m="buscar" aria-label="Buscar una dirección o un lugar" aria-expanded="false">' + ico('lupa') + '</button>' +
-      '<button type="button" data-m="capa" aria-label="Vista satélite" aria-pressed="' + (base === 'satelite') + '">' + ico('capas') + '</button>' +
+      '<button type="button" data-m="capa" aria-label="Elegir el mapa base" aria-haspopup="true" aria-expanded="false">' + ico('capas') + '</button>' +
       '<button type="button" data-m="filtro" aria-label="Filtrar el mapa por viaje" aria-haspopup="true" aria-expanded="false">' + ico('filtro') + '</button>' +
       '<button type="button" class="cz" data-m="fav" aria-label="Ver solo las fotos favoritas en el mapa" aria-pressed="false">' + ico('corazon') + '</button>';
     const bFav = ctrl.lastChild;
@@ -294,13 +305,7 @@
       else if (a === 'full') { if (api.alFull) api.alFull(b); }
       else if (a === 'fav') { if (api.alFav) api.alFav(); }
       else if (a === 'buscar') { if (api.alBuscar) api.alBuscar(b); }
-      else {
-        map.removeLayer(capas[base]);
-        base = base === 'mapa' ? 'satelite' : 'mapa';
-        capas[base].addTo(map);
-        b.setAttribute('aria-pressed', base === 'satelite');
-        try { localStorage.setItem('mis-viajes.capa', base); } catch (er) { /* sin almacenamiento */ }
-      }
+      else if (a === 'capa') { if (api.alCapa) api.alCapa(b); }
     };
     izq.addEventListener('click', alClic);
     ctrl.addEventListener('click', alClic);
@@ -312,6 +317,9 @@
       alFav: null,
       alFull: null,
       alBuscar: null,
+      alCapa: null,
+      bases: () => Object.keys(capas).map(k => ({ k, nombre: NOMBRES[k], activa: k === base })),
+      base: ponerBase,
       favorito(on) { bFav.setAttribute('aria-pressed', on); },
       tam() { map.invalidateSize({ pan: false }); },
       zoom: () => map.getZoom(),
@@ -436,18 +444,18 @@
     return out;
   }
 
-  /* Reduce la foto a 1600 px de lado mayor (≈300 KB) para que la web cargue rápido */
+  /* Guarda la foto a 2560 px de lado mayor y buena calidad (≈1 MB): se puede ampliar sin que se vea borrosa */
   function reducir(file) {
     return new Promise((ok, mal) => {
       const u = URL.createObjectURL(file), im = new Image();
       im.onload = () => {
-        const k = Math.min(1, 1600 / Math.max(im.naturalWidth, im.naturalHeight));
+        const k = Math.min(1, 2560 / Math.max(im.naturalWidth, im.naturalHeight));
         const c = document.createElement('canvas');
         c.width = Math.round(im.naturalWidth * k);
         c.height = Math.round(im.naturalHeight * k);
         c.getContext('2d').drawImage(im, 0, 0, c.width, c.height);
         URL.revokeObjectURL(u);
-        c.toBlob(b => { c.width = c.height = 0; if (b) ok(b); else mal(new Error('jpeg')); }, 'image/jpeg', 0.82);
+        c.toBlob(b => { c.width = c.height = 0; if (b) ok(b); else mal(new Error('jpeg')); }, 'image/jpeg', 0.9);
       };
       im.onerror = () => { URL.revokeObjectURL(u); mal(new Error('imagen')); };
       im.src = u;
@@ -544,26 +552,62 @@
     LS.poner('pendiente', null);
     pintarAviso();
   }
-  function guardarCopia() {
+  function copiaGuardada(msg) {
+    copiaHecha();
+    if (hModo === 'privado') cerrarCapa(baseHoja());
+    toast(msg);
+  }
+  /* Guardar la copia en cualquier equipo: descargar (ordenador, Android, iPhone) o compartir (móvil) */
+  const esIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+  const tactil = matchMedia('(pointer: coarse)').matches;
+  function puedeCompartir() {
+    try { return !!(copia && (esIOS || tactil) && navigator.canShare && navigator.canShare({ files: [copia.file] })); } catch (e) { return false; }
+  }
+  async function descargarCopia() {
     if (!copia) return;
     const f = copia.file;
-    if (navigator.canShare && navigator.canShare({ files: [f] })) {
-      navigator.share({ files: [f], title: f.name }).then(() => { copiaHecha(); toast('Copia guardada'); }, () => toast('No se ha guardado la copia'));
-    } else {
-      const a = document.createElement('a');
-      a.href = copia.url;
-      a.download = f.name;
-      document.body.append(a);
-      a.click();
-      a.remove();
-      copiaHecha();
-      toast('Copia descargada: ' + f.name);
+    let enMarco = true;
+    try { enMarco = window.self !== window.top; } catch (e) { enMarco = true; }
+    if (window.showSaveFilePicker && !enMarco) { /* ordenador: deja elegir la carpeta */
+      try {
+        const h = await window.showSaveFilePicker({ suggestedName: f.name, types: [{ description: 'Copia de Mis viajes', accept: { 'application/zip': ['.zip'] } }] });
+        const w = await h.createWritable();
+        await w.write(f);
+        await w.close();
+        copiaGuardada('Copia guardada: ' + h.name);
+        return;
+      } catch (e) {
+        if (e && e.name === 'AbortError') return; /* se canceló el diálogo */
+      }
     }
+    const a = document.createElement('a');
+    a.href = copia.url;
+    a.download = f.name;
+    a.rel = 'noopener';
+    document.body.append(a);
+    a.click();
+    a.remove();
+    copiaGuardada('Copia descargada: ' + f.name + ' (carpeta de Descargas)');
   }
-  async function restaurar(file) {
+  function compartirCopia() {
+    if (!copia) return;
+    const f = copia.file;
+    navigator.share({ files: [f], title: f.name }).then(() => copiaGuardada('Copia guardada'),
+      e => { if (!e || e.name !== 'AbortError') toast('No se pudo compartir. Usa «Descargar copia».'); });
+  }
+  /* Acepta el zip de la copia o, si el equipo lo descomprimió solo, sus archivos sueltos (viajes.json y fotos) */
+  async function restaurar(files) {
     toast('Leyendo la copia…', true);
-    let partes;
-    try { partes = await leerZip(file); } catch (e) { toast('Ese archivo no es una copia de Mis viajes'); return; }
+    let partes = null;
+    const zip = files.find(f => /\.zip$/i.test(f.name) || /zip/i.test(f.type)) || (files.length === 1 && !/\.json$/i.test(files[0].name) ? files[0] : null);
+    try {
+      if (zip) partes = await leerZip(zip);
+      else { partes = {}; files.forEach(f => { partes[f.name.split('/').pop()] = f; }); }
+    } catch (e) {
+      toast(e && e.message === 'compresion' ? 'Este navegador no puede abrir un zip comprimido. Actualízalo o usa Chrome.' : 'Ese archivo no es una copia de Mis viajes');
+      return;
+    }
+    if (!partes['viajes.json']) { toast('No encuentro «viajes.json»: elige el zip de la copia, o todos sus archivos a la vez.'); return; }
     let lista = null;
     try {
       const j = JSON.parse(await partes['viajes.json'].text());
@@ -639,7 +683,10 @@
     else w.style.setProperty('--alto', Math.max(240, innerHeight - (w.getBoundingClientRect().top + scrollY) - tabs.offsetHeight - Math.round(innerHeight * 0.16)) + 'px');
     mapa.tam();
   }
+  let anchoPrevio = innerWidth;
   window.addEventListener('resize', () => {
+    if (innerWidth === anchoPrevio) return; /* solo al girar o cambiar el ancho: el teclado no cuenta */
+    anchoPrevio = innerWidth;
     altoMapa();
     const pg = $('.pager', panel);
     if (pg) pg.scrollLeft = TABS.indexOf(tab) * pg.clientWidth; /* al girar el móvil, seguir en la misma pestaña */
@@ -652,12 +699,13 @@
   function pintarAviso() {
     const a = $('#aviso');
     let h = '';
+    const equis = '<button type="button" class="ib ib-s aviso-x" data-aviso-x aria-label="Cerrar este aviso">' + ico('x') + '</button>';
     if (modo === 'ejemplos') {
-      h = '<p>' + ico('mundo') + '<span>Estás viendo <b>viajes de ejemplo</b>.' + (hayMios ? '' : ' Los tuyos se guardan solo en este dispositivo.') + '</span></p>' +
+      if (!LS.leer('x-ej')) h = equis + '<p>' + ico('mundo') + '<span>Estás viendo <b>viajes de ejemplo</b>.' + (hayMios ? '' : ' Los tuyos se guardan solo en este dispositivo.') + '</span></p>' +
         (hayMios ? '<button type="button" class="pill pri" data-modo="mios">Volver a mis viajes</button>' : '<a class="pill pri" href="#privado">Empezar con mis viajes</a>');
-    } else if (LS.leer('pendiente') && datos.length) {
+    } else if (LS.leer('pendiente') && datos.length && !LS.leer('x-copia')) {
       const u = LS.leer('copia');
-      h = '<p>' + ico('nube') + '<span>' + (u ? 'Hay cambios desde tu última copia (' + fechaTxt(u.slice(0, 10)) + ').' : 'Aún no has hecho ninguna copia de seguridad.') + '</span></p>' +
+      h = equis + '<p>' + ico('nube') + '<span>' + (u ? 'Hay cambios desde tu última copia (' + fechaTxt(u.slice(0, 10)) + ').' : 'Aún no has hecho ninguna copia de seguridad.') + '</span></p>' +
         '<a class="pill pri" href="#privado">Hacer copia</a>';
     }
     a.innerHTML = h;
@@ -743,6 +791,7 @@
     if (mapa.verTodo) mapa.verTodo();
   }
   mapa.alFull = () => ponerFull(!full);
+  $('#m-logo').addEventListener('click', () => { if (mapa.verTodo) mapa.verTodo(); }); /* como el botón del planeta */
   function ventanaViaje(v) {
     const p = posicion(v), f = portada(v), n = conFoto(v).length;
     mapa.ventana(p.lat, p.lng, (f ? '<img class="pop-img" src="' + src(f) + '" alt="">' : '') + '<b>' + esc(v.titulo) + '</b>' +
@@ -792,25 +841,46 @@
     b.setAttribute('aria-expanded', 'true');
     q.focus();
   };
+  async function pedir(url) {
+    const c = new AbortController(), reloj = setTimeout(() => c.abort(), 9000);
+    try {
+      const r = await fetch(url, { signal: c.signal });
+      if (!r.ok) throw new Error('http ' + r.status);
+      return await r.json();
+    } finally { clearTimeout(reloj); }
+  }
+  /* Prueba dos buscadores libres: si uno falla o no encuentra nada, se usa el otro */
+  async function geocodificar(t) {
+    const txt = encodeURIComponent(t);
+    let fallo = null;
+    try {
+      const j = await pedir('https://photon.komoot.io/api/?limit=5&q=' + txt);
+      const l = (j.features || []).map(f => {
+        const p = f.properties || {}, c = (f.geometry || {}).coordinates || [];
+        const partes = [p.name || [p.street, p.housenumber].filter(Boolean).join(' '), p.city, p.state, p.country].filter(Boolean);
+        return { lat: +(+c[1]).toFixed(5), lng: +(+c[0]).toFixed(5), nombre: partes[0] || t, txt: [...new Set(partes)].join(', ') };
+      });
+      if (l.length) return l;
+    } catch (e) { fallo = e; }
+    try {
+      const l = await pedir('https://nominatim.openstreetmap.org/search?format=jsonv2&limit=5&accept-language=es&q=' + txt);
+      return l.map(x => ({ lat: +(+x.lat).toFixed(5), lng: +(+x.lon).toFixed(5), nombre: x.name || String(x.display_name || t).split(',')[0], txt: x.display_name || '' }));
+    } catch (e) { if (fallo) throw e; return []; }
+  }
   busca.addEventListener('submit', async e => {
     e.preventDefault();
     const t = q.value.trim(), n = ++turno;
     if (t.length < 3) { res.innerHTML = '<p class="nota">Escribe al menos 3 letras.</p>'; return; }
     res.innerHTML = '<p class="nota">Buscando…</p>';
     try {
-      const r = await fetch('https://nominatim.openstreetmap.org/search?format=jsonv2&limit=5&accept-language=es&q=' + encodeURIComponent(t), { headers: { Accept: 'application/json' } });
-      if (!r.ok) throw new Error('busqueda');
-      const lista = await r.json();
+      const lista = await geocodificar(t);
       if (n !== turno) return;
-      hallados = lista.slice(0, 5).map(x => ({
-        lat: +(+x.lat).toFixed(5), lng: +(+x.lon).toFixed(5),
-        nombre: x.name || String(x.display_name || t).split(',')[0], txt: x.display_name || ''
-      })).filter(x => isFinite(x.lat) && isFinite(x.lng));
+      hallados = lista.filter(x => isFinite(x.lat) && isFinite(x.lng)).slice(0, 5);
       res.innerHTML = hallados.length ? hallados.map((x, i) => '<button type="button" data-res="' + i + '">' + ico('pin') +
         '<span><b>' + esc(x.nombre) + '</b><small>' + esc(x.txt) + '</small></span></button>').join('')
         : '<p class="nota">Sin resultados. Prueba con más detalle: calle, ciudad, país.</p>';
     } catch (er) {
-      if (n === turno) res.innerHTML = '<p class="nota">No se pudo buscar. Comprueba la conexión.</p>';
+      if (n === turno) res.innerHTML = '<p class="nota">No se pudo buscar ahora. Inténtalo otra vez en un momento.</p>';
     }
   });
   res.addEventListener('click', e => {
@@ -852,7 +922,7 @@
   /* ---------- Menú del mapa: filtrar por viaje ---------- */
   const menu = $('#m-menu');
   let menuBoton = null;
-  mapa.alFiltro = b => { if (menu.hidden) { cerrarBusca(); abrirMenu(b); } else cerrarMenu(); };
+  mapa.alFiltro = b => { if (!menu.hidden && menuBoton === b) cerrarMenu(); else { cerrarBusca(); cerrarMenu(); abrirMenu(b); } };
   function abrirMenu(b) {
     menuBoton = b;
     const actual = viajeActual ? viajeActual.id : enMapa;
@@ -865,12 +935,23 @@
     const s = $('[aria-pressed="true"]', menu) || $('button', menu);
     s.focus();
   }
+  function abrirCapas(b) {
+    menuBoton = b;
+    menu.innerHTML = '<p class="m-menu-t">Mapa base</p>' + mapa.bases().map(x =>
+      '<button type="button" data-base="' + x.k + '" aria-pressed="' + x.activa + '">' + ico('capas') + x.nombre + '</button>').join('');
+    menu.hidden = false;
+    b.setAttribute('aria-expanded', 'true');
+    $('[aria-pressed="true"]', menu).focus();
+  }
+  mapa.alCapa = b => { if (!menu.hidden && menuBoton === b) cerrarMenu(); else { cerrarBusca(); cerrarMenu(); abrirCapas(b); } };
   function cerrarMenu(volver) {
     if (menu.hidden) return;
     menu.hidden = true;
     if (menuBoton) { menuBoton.setAttribute('aria-expanded', 'false'); if (volver) menuBoton.focus(); }
   }
   menu.addEventListener('click', e => {
+    const cb = e.target.closest('[data-base]');
+    if (cb) { mapa.base(cb.dataset.base); cerrarMenu(true); return; }
     const b = e.target.closest('[data-filtro]');
     if (!b) return;
     const id = b.dataset.filtro;
@@ -884,7 +965,7 @@
     const t = $('#ficha-' + id);
     if (t) { irFicha(t); mapaViaje(porId(id), true); }
   });
-  document.addEventListener('pointerdown', e => { if (!menu.hidden && !menu.contains(e.target) && !e.target.closest('[data-m="filtro"]')) cerrarMenu(); });
+  document.addEventListener('pointerdown', e => { if (!menu.hidden && !menu.contains(e.target) && !e.target.closest('[data-m="filtro"], [data-m="capa"]')) cerrarMenu(); });
 
   /* ---------- Portada: pestañas deslizables Viajes / Fotos ---------- */
   function pestanas() {
@@ -964,8 +1045,8 @@
     h += '<div class="carr"><div class="pista" tabindex="0" role="region" aria-label="Mis viajes. Desliza para ver más">' +
       ord.map((v, i) => ficha(v, i, ord.length)).join('') +
       '<button type="button" class="fi fi-plus" data-nuevo-viaje><span class="pl" aria-hidden="true">' + ico('mas') + '</span><b>Añadir viaje</b><small>Destino, fechas y fotos</small></button>' +
-      '</div><div class="puntos-carr">' + ord.map((v, i) => '<button type="button" class="dot" data-ir="' + i + '" aria-label="Ir al viaje ' + (i + 1) + '"></button>').join('') +
-      '<button type="button" class="dot dot-mas" data-ir="' + ord.length + '" aria-label="Ir a añadir viaje"></button></div></div>';
+      '</div><div class="puntos-carr"><button type="button" class="pill fi-nav" data-paso="-1">' + ico('izq') + 'Anterior</button><span class="dots">' + ord.map((v, i) => '<button type="button" class="dot" data-ir="' + i + '" aria-label="Ir al viaje ' + (i + 1) + '"></button>').join('') +
+      '<button type="button" class="dot dot-mas" data-ir="' + ord.length + '" aria-label="Ir a añadir viaje"></button></span><button type="button" class="pill fi-nav" data-paso="1">Siguiente' + ico('der') + '</button></div></div>';
     if (!ord.length) h += '<p class="nota centro">' + (modo === 'mios' ? 'Aún no tienes viajes. Pulsa «Añadir viaje» para crear el primero.' : '') + '</p>';
     return h;
   }
@@ -1057,7 +1138,8 @@
     pg.scrollLeft = TABS.indexOf(tab) * pg.clientWidth;
     altoPager();
     moverBarra(TABS.indexOf(tab));
-    let t0 = 0;
+    let t0 = 0, gesto = false; /* solo un gesto de la persona cambia de pestaña al deslizar */
+    ['pointerdown', 'touchstart', 'wheel'].forEach(ev => pg.addEventListener(ev, () => { gesto = true; }, { passive: true }));
     pg.addEventListener('scroll', () => {
       moverBarra(pg.scrollLeft / Math.max(1, pg.clientWidth));
       clearTimeout(t0);
@@ -1066,6 +1148,8 @@
         if (Math.abs(r - Math.round(r)) > 0.02) return; /* aún se está moviendo */
         const t = TABS[Math.round(r)];
         if (!t || t === tab) return;
+        if (!gesto) { pg.scrollLeft = TABS.indexOf(tab) * pg.clientWidth; return; } /* lo movió el navegador al recolocar la página */
+        gesto = false;
         tab = t;
         marcarTab();
         altoPager();
@@ -1110,8 +1194,8 @@
     if (!pista) return;
     const fichas = [...pista.children], dots = [...panel.querySelectorAll('.dot')];
     const add = $('.fi-add', panel), mas = $('.fi-plus', pista);
-    /* El botón fijo «Añadir viaje» se atenúa cuando la ficha punteada ya está a la vista */
-    const atenuar = () => { if (add && mas) add.classList.toggle('tenue', mas.offsetLeft + mas.offsetWidth * 0.6 <= pista.scrollLeft + pista.clientWidth + 1); };
+    /* El botón fijo «Añadir viaje» se atenúa en cuanto empieza a asomar la ficha punteada */
+    const atenuar = () => { if (add && mas) add.classList.toggle('tenue', mas.offsetLeft + 10 <= pista.scrollLeft + pista.clientWidth); };
     let cola = 0, actual = null, tMapa = 0;
     const marcar = () => {
       cola = 0;
@@ -1141,7 +1225,7 @@
     const fs = conFoto(v), lugares = puntosDe(v).filter(p => !p.f), n = dias(v), ord = ordenados(), k = ord.indexOf(v);
     const sinUbic = fs.filter(p => p.lat == null).length;
     const enl = (v.enlaces || []).filter(e => e && e.u);
-    let h = '<a class="volver" href="' + HASH[tab] + '">' + ico('izq') + { viajes: 'Mis viajes', fotos: 'Todas las fotos', favs: 'Favoritos' }[tab] + '</a>';
+    let h = '<a class="pill volver" href="' + HASH[tab] + '">' + ico('izq') + { viajes: 'Volver a mis viajes', fotos: 'Volver a todas las fotos', favs: 'Volver a favoritas' }[tab] + '</a>';
     h += '<h2 class="ttl">' + esc(v.titulo) + '</h2><div class="meta">' +
       (v.desde ? '<span>' + ico('cal') + rango(v) + (n > 1 ? ' · ' + n + ' días' : '') + '</span>' : '') + '</div>' +
       ovalos(lugaresDe(v).length ? lugaresDe(v) : (v.lugar ? [v.lugar] : []));
@@ -1195,7 +1279,7 @@
     vistaKey = key;
     panel.classList.toggle('inicio', vista !== 'viaje');
     if (vista === 'viaje') pintarViaje(v); else pintarInicio();
-    if (cambiaVista) window.scrollTo(0, 0);
+    if (cambiaVista) { window.scrollTo(0, 0); panel.scrollTop = 0; }
     else { const p2 = $('.pista', panel); if (p2 && x) p2.scrollLeft = x; }
   }
 
@@ -1300,6 +1384,7 @@
     }
     vV = v; vP = p;
     const fs = conFoto(v), n = fs.indexOf(p);
+    zoomPoner(1);
     vImg.src = src(p.f);
     vImg.alt = nombrePunto(p) + ' · ' + v.titulo;
     $('#visor-t').textContent = v.titulo + ' · ' + (n + 1) + ' / ' + fs.length;
@@ -1319,6 +1404,7 @@
   function ocultarVisor() {
     if (visor.hidden) return;
     visor.hidden = true;
+    zoomPoner(1);
     vImg.removeAttribute('src');
     if (hoja.hidden) document.documentElement.classList.remove('bloq');
     mapa.resaltar(null);
@@ -1338,6 +1424,7 @@
     }
     const a = b.dataset.v, p = vP;
     if (a === 'cerrar') cerrarCapa('#v/' + vV.id);
+    else if (a === 'zoom') zoomPoner(zS > 1 ? 1 : 2.5);
     else if (a === 'fav') {
       if (p.fav) delete p.fav; else p.fav = true;
       guardarFav();
@@ -1390,14 +1477,55 @@
       else ir('#v/' + vV.id + '/' + resto[Math.min(n, resto.length - 1)].id, true);
     }
   });
-  const escena = $('.v-escena', visor);
-  escena.addEventListener('pointerdown', e => { toqueX = e.clientX; barrido = false; });
-  escena.addEventListener('pointerup', e => {
-    if (toqueX == null) return;
+  /* Ampliar la foto: botón de la lupa, doble toque, pellizco o rueda; arrastrar para moverla */
+  const escena = $('.v-escena', visor), dedos = new Map();
+  let zS = 1, zX = 0, zY = 0, zIni = null, pIni = null;
+  function zoomPoner(s, x, y) {
+    zS = Math.max(1, Math.min(6, s));
+    if (zS === 1) { zX = 0; zY = 0; }
+    else {
+      const mx = Math.max(0, (vImg.offsetWidth * zS - escena.clientWidth) / 2), my = Math.max(0, (vImg.offsetHeight * zS - escena.clientHeight) / 2);
+      zX = Math.max(-mx, Math.min(mx, x == null ? zX : x));
+      zY = Math.max(-my, Math.min(my, y == null ? zY : y));
+    }
+    vImg.style.transform = zS > 1 ? 'translate(' + zX.toFixed(1) + 'px,' + zY.toFixed(1) + 'px) scale(' + zS.toFixed(3) + ')' : '';
+    visor.classList.toggle('zoom', zS > 1);
+    const b = $('[data-v="zoom"]', visor);
+    b.setAttribute('aria-pressed', zS > 1);
+    b.setAttribute('aria-label', zS > 1 ? 'Quitar la ampliación' : 'Ampliar la foto');
+  }
+  const separacion = () => { const d = [...dedos.values()]; return Math.hypot(d[0].x - d[1].x, d[0].y - d[1].y); };
+  escena.addEventListener('pointerdown', e => {
+    if (e.target.closest('.v-btn')) return;
+    dedos.set(e.pointerId, { x: e.clientX, y: e.clientY });
+    barrido = false;
+    if (dedos.size === 1) { toqueX = e.clientX; pIni = { x: e.clientX, y: e.clientY, zX, zY }; }
+    else if (dedos.size === 2) { toqueX = null; zIni = { d: separacion() || 1, s: zS }; }
+  });
+  escena.addEventListener('pointermove', e => {
+    if (!dedos.has(e.pointerId)) return;
+    dedos.set(e.pointerId, { x: e.clientX, y: e.clientY });
+    if (dedos.size === 2 && zIni) { barrido = true; zoomPoner(zIni.s * separacion() / zIni.d); }
+    else if (dedos.size === 1 && zS > 1 && pIni) {
+      const dx = e.clientX - pIni.x, dy = e.clientY - pIni.y;
+      if (Math.abs(dx) + Math.abs(dy) > 4) barrido = true;
+      zoomPoner(zS, pIni.zX + dx, pIni.zY + dy);
+    }
+  });
+  const soltarDedo = e => {
+    if (!dedos.has(e.pointerId)) return;
+    dedos.delete(e.pointerId);
+    if (dedos.size < 2) zIni = null;
+    if (dedos.size) { const d = [...dedos.values()][0]; pIni = { x: d.x, y: d.y, zX, zY }; toqueX = null; return; }
+    if (toqueX == null || zS > 1 || e.type === 'pointercancel') { toqueX = null; return; }
     const dx = e.clientX - toqueX;
     toqueX = null;
     if (Math.abs(dx) > 50) { barrido = true; cambiarFoto(dx < 0 ? 1 : -1); }
-  });
+  };
+  escena.addEventListener('pointerup', soltarDedo);
+  escena.addEventListener('pointercancel', soltarDedo);
+  escena.addEventListener('dblclick', e => { if (e.target === vImg) zoomPoner(zS > 1 ? 1 : 2.5); });
+  escena.addEventListener('wheel', e => { e.preventDefault(); zoomPoner(zS * Math.exp(-e.deltaY * 0.002)); }, { passive: false });
 
   /* ===================== Hoja: punto, privado y copia ===================== */
   const hoja = $('#hoja'), caja = $('#hoja-caja');
@@ -1433,8 +1561,8 @@
       h = cabecera('Tus viajes, solo en este dispositivo') +
         '<p>Lo que ves ahora son <b>viajes de ejemplo</b>, los que enseña la web pública.</p>' +
         '<ul class="pasos"><li>Tus viajes, fotos y archivos se guardan <b>solo en este dispositivo</b>. No se suben a GitHub ni a ningún sitio.</li>' +
-        '<li>Haz una <b>copia de seguridad</b> de vez en cuando y guárdala en <b>Archivos › iCloud Drive</b>.</li>' +
-        '<li>Con esa copia puedes <b>restaurarlo todo</b> en otro iPhone (por ejemplo, el de Inés) o si borras la app.</li></ul>' +
+        '<li>Haz una <b>copia de seguridad</b> de vez en cuando y guárdala donde quieras: una carpeta del ordenador, Archivos, iCloud Drive o Google Drive.</li>' +
+        '<li>Con esa copia puedes <b>restaurarlo todo</b> en otro equipo (iPhone, Android u ordenador) o si borras la app.</li></ul>' +
         '<div class="lotes">' + (hayMios ? '<button type="button" class="pill pri" data-modo="mios">' + ico('pin') + 'Volver a mis viajes</button>'
           : '<button type="button" class="pill pri" data-f="empezar">' + ico('pin') + 'Empezar con mis viajes</button>') +
         '<button type="button" class="pill" data-f="restaurar">' + ico('subir') + 'Restaurar una copia</button></div>';
@@ -1443,17 +1571,22 @@
       h = cabecera('Copia de seguridad') +
         '<p>Tienes <b>' + plural(datos.length, 'viaje', 'viajes') + '</b> y <b>' + plural(n, 'archivo', 'archivos') + '</b> guardados solo en este dispositivo.</p>' +
         '<p class="nota">' + (u ? 'Última copia: ' + fechaTxt(u.slice(0, 10)) + (LS.leer('pendiente') ? ' · hay cambios desde entonces.' : ' · al día.') : 'Aún no has hecho ninguna copia.') + '</p>' +
-        '<ol class="pasos"><li>Pulsa <b>Guardar copia</b>.</li><li>En el menú elige <b>Guardar en Archivos</b> › <b>iCloud Drive</b> (por ejemplo, en una carpeta «Mis viajes»).</li>' +
-        '<li>Para recuperarla: aquí, <b>Restaurar una copia</b> › elige el zip.</li></ol>' +
-        '<div class="lotes"><button type="button" class="pill pri" data-f="guardar-copia" disabled>' + ico('nube') + '<span>Preparando la copia…</span></button>' +
+        '<ul class="pasos"><li><b>Descargar copia</b>: guarda el zip en este equipo. En el ordenador puedes elegir la carpeta; en el móvil va a Descargas.</li>' +
+        '<li><b>Compartir copia</b> (móvil): para mandarla a Archivos, iCloud Drive o Google Drive.</li>' +
+        '<li><b>Restaurar una copia</b>: elige ese zip desde cualquier carpeta. Sirve en iPhone, Android y ordenador.</li></ul>' +
+        '<div class="lotes">' +
+        '<button type="button" class="pill' + (esIOS ? '' : ' pri') + '" data-f="descargar-copia" disabled>' + ico('nube') + '<span>Preparando la copia…</span></button>' +
+        '<button type="button" class="pill' + (esIOS ? ' pri' : '') + '" data-f="compartir-copia" hidden>' + ico('enlace') + '<span>Compartir copia</span></button>' +
         '<button type="button" class="pill" data-f="restaurar">' + ico('subir') + '<span>Restaurar una copia</span></button>' +
         '<button type="button" class="pill" data-modo="ejemplos">' + ico('mundo') + 'Ver los viajes de ejemplo</button></div>' +
         '<p class="nota">Restaurar sustituye lo que hay ahora en este dispositivo por lo de la copia.</p>';
       prepararCopia().then(c => {
-        const b = $('[data-f="guardar-copia"]', caja);
+        const b = $('[data-f="descargar-copia"]', caja), sh = $('[data-f="compartir-copia"]', caja);
         if (!b) return;
         b.disabled = false;
-        $('span', b).textContent = 'Guardar copia · ' + mb(c.file.size);
+        $('span', b).textContent = 'Descargar copia · ' + mb(c.file.size);
+        sh.hidden = !puedeCompartir();
+        if (esIOS && !sh.hidden) sh.parentElement.insertBefore(sh, b); /* en iPhone, compartir va primero */
       }, () => toast('No se pudo preparar la copia'));
     }
     mostrarHoja(h, 'privado');
@@ -1533,6 +1666,15 @@
     toast(dest && dest !== v ? 'Punto pasado a «' + dest.titulo + '»' : nuevo ? 'Punto creado' : 'Punto guardado');
   }
 
+  hoja.addEventListener('dragover', e => { if (hModo === 'privado') e.preventDefault(); });
+  hoja.addEventListener('drop', e => {
+    if (hModo !== 'privado') return;
+    e.preventDefault();
+    const fs = [...e.dataTransfer.files];
+    if (!fs.length) return;
+    if (modo === 'mios' && datos.length) { toast('Para sustituir tus viajes, usa el botón «Restaurar una copia».'); return; }
+    restaurar(fs);
+  });
   hoja.addEventListener('submit', e => { e.preventDefault(); if (hModo === 'punto') guardarPunto(); });
   hoja.addEventListener('click', e => {
     if (e.target === hoja) { cerrarCapa(baseHoja()); return; }
@@ -1540,7 +1682,8 @@
     if (!b) return;
     const a = b.dataset.f;
     if (a === 'cerrar') cerrarCapa(baseHoja());
-    else if (a === 'guardar-copia') guardarCopia();
+    else if (a === 'descargar-copia') descargarCopia();
+    else if (a === 'compartir-copia') compartirCopia();
     else if (a === 'restaurar') {
       if (modo === 'mios' && datos.length && b.dataset.ok !== '1') {
         b.dataset.ok = '1';
@@ -1548,7 +1691,7 @@
         return;
       }
       modoEntrada = 'copia';
-      abrirEntrada('.zip,application/zip', false);
+      abrirEntrada('.zip,.json,application/zip,application/x-zip-compressed,application/octet-stream,application/json,image/jpeg,application/pdf', true);
     } else if (a === 'empezar') {
       hoja.hidden = true; hModo = ''; caja.innerHTML = ''; document.documentElement.classList.remove('bloq');
       cambiarModo('mios').then(() => { ponerEdicion(true); pintarPanel('inicio', null, true); toast('Listo. Pulsa «Añadir viaje» para crear el primero.'); });
@@ -1579,6 +1722,7 @@
     }
   });
   document.addEventListener('click', e => {
+    if (e.target.closest('[data-aviso-x]')) { LS.poner(modo === 'ejemplos' ? 'x-ej' : 'x-copia', '1'); pintarAviso(); return; }
     const b = e.target.closest('[data-modo]');
     if (!b) return;
     const m = b.dataset.modo;
@@ -1660,6 +1804,13 @@
     if (p) { filtro = p.dataset.anio; pintarPanel('inicio', null); return; }
     const ft = t.closest('.ft');
     if (ft) { abrirFoto(ft.dataset.v ? porId(ft.dataset.v) : viajeActual, ft.dataset.p); return; }
+    const paso = t.closest('[data-paso]');
+    if (paso) {
+      const fs = [...$('.pista', panel).children], k = fs.indexOf(fichaActual()) + (+paso.dataset.paso);
+      seguir = true;
+      if (fs[k]) irFicha(fs[k]);
+      return;
+    }
     const dot = t.closest('[data-ir]');
     if (dot) { seguir = true; const f = $('.pista', panel).children[+dot.dataset.ir]; if (f) irFicha(f); return; }
     const mod = t.closest('[data-modificar]');
@@ -1762,7 +1913,7 @@
   entrada.addEventListener('change', async () => {
     const files = [...entrada.files];
     if (!files.length) return;
-    if (modoEntrada === 'copia') { restaurar(files[0]); return; }
+    if (modoEntrada === 'copia') { restaurar(files); return; }
     if (modoEntrada === 'viaje') { if (viajeActual) anadirFotos(viajeActual, files); return; }
     if (modoEntrada === 'adjunto') { if (adjuntarA) anadirAdjuntos(adjuntarA, files); return; }
     if (!ed) return;

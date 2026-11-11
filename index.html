@@ -5,8 +5,8 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="description" content="Mis viajes: fichas, mapa y fotos de viajes. Los viajes propios se guardan solo en el dispositivo.">
 <meta name="robots" content="noindex, nofollow">
-<meta name="theme-color" content="#172D43">
-<meta name="color-scheme" content="light dark">
+<meta name="theme-color" content="#0b1722">
+<meta name="color-scheme" content="dark">
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-title" content="Mis viajes">
@@ -75,6 +75,7 @@
       <button type="submit" class="ib ib-s" aria-label="Buscar"><svg class="ic" aria-hidden="true"><use href="#i-lupa"/></svg></button>
       <div id="m-res" class="m-res" aria-live="polite"></div>
     </form>
+    <button type="button" id="m-logo" class="m-logo" aria-label="Ver todo el mapa"><img src="logo.png" width="72" height="72" alt=""></button>
     <div id="m-menu" class="m-menu" role="group" aria-label="Filtrar el mapa por viaje" hidden></div>
     <div id="mapa" class="mapa" tabindex="0" role="region" aria-label="Mapa de mis viajes. Arrastra para moverte, pellizca para acercar."></div>
   </section>
@@ -92,6 +93,7 @@
 <div id="visor" class="visor" role="dialog" aria-modal="true" aria-labelledby="visor-t" hidden>
   <div class="v-barra">
     <p id="visor-t" class="v-cont"></p>
+    <button type="button" class="v-btn" data-v="zoom" aria-pressed="false" aria-label="Ampliar la foto"><svg class="ic" aria-hidden="true"><use href="#i-lupa"/></svg></button>
     <button type="button" class="v-btn cz" data-v="fav" aria-pressed="false" aria-label="Foto favorita"><svg class="ic" aria-hidden="true"><use href="#i-corazon"/></svg></button>
     <button type="button" class="v-btn" data-v="cerrar" aria-label="Cerrar"><svg class="ic" aria-hidden="true"><use href="#i-x"/></svg></button>
   </div>

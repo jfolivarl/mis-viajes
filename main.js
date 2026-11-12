@@ -683,7 +683,7 @@
     }
     modo = m;
     LS.poner('modo', m);
-    fichaAbierta = null;
+    fichaEd = null;
     fichaVer = null;
     pintarCabecera();
     pintarAviso();
@@ -696,7 +696,7 @@
   /* ===================== Interfaz ===================== */
   const mapa = crearMapa($('#mapa'));
   const panel = $('#panel');
-  let filtro = '', vistaKey = '', viajeActual = null, fichaAbierta = null, fichaVer = null;
+  let filtro = '', vistaKey = '', viajeActual = null, fichaEd = null, fichaVer = null;
   let tab = 'viajes', seguir = true, enMapa = null, soloFav = false;
   const TABS = ['viajes', 'fotos'], HASH = { viajes: '#', fotos: '#fotos' };
   const esFav = v => puntosDe(v).some(p => p.fav); /* los favoritos son solo de fotos */
@@ -1032,11 +1032,12 @@
       '<button type="button" class="ib" data-f="quitar-enl" aria-label="Quitar enlace">' + ico('x') + '</button></div>';
   }
   const textoPos = (p, vacio) => p ? 'Ubicación: ' + coord(p) : vacio;
+  const listaAdjuntos = v => adjuntosDe(v).map((x, j) => adjuntoFila(v, x, j)).join('') || '<p class="fi-nof">Sin archivos adjuntos todavía</p>';
   function formFicha(v) {
     const enl = (v.enlaces && v.enlaces.length) ? v.enlaces : [{ t: '', u: '' }];
     const p = v.lat != null ? { lat: v.lat, lng: v.lng } : null, cp = centroPuntos(v);
     return '<form class="fi-form" data-id="' + v.id + '" novalidate' + (p ? ' data-lat="' + p.lat + '" data-lng="' + p.lng + '"' : '') + '>' +
-      '<label class="campo">Destino o título *<input name="titulo" type="text" required maxlength="80" value="' + esc(v.titulo) + '"></label>' +
+      '<label class="campo">Destino o título *<input name="titulo" type="text" required maxlength="80" value="' + esc(v.nueva ? '' : v.titulo) + '" placeholder="Por ejemplo: Lisboa"></label>' +
       '<label class="campo">Lugar<input name="lugar" type="text" maxlength="100" value="' + esc(v.lugar) + '" placeholder="Ciudad, país"></label>' +
       '<label class="campo">Itinerario (opcional): lugares separados por comas<input name="itinerario" type="text" maxlength="200" value="' + esc(v.itinerario) + '" placeholder="Wynwood, Bayside, Miami Beach"></label>' +
       '<div class="dos"><label class="campo">Desde (ida)<input name="desde" type="date" value="' + esc(v.desde) + '"></label>' +
@@ -1047,12 +1048,14 @@
       '<fieldset class="campo"><legend>Sitio del viaje en el mapa</legend><p class="nota f-pos">' + textoPos(p, 'Sin ubicación. Si añades fotos con GPS se pone sola.') + '</p><div class="pills">' +
       '<button type="button" class="pill" data-f="elegir">' + ico('diana') + 'Elegir en el mapa</button>' +
       (cp ? '<button type="button" class="pill" data-f="desde-puntos">' + ico('foto') + 'Centro de las fotos</button>' : '') + '</div></fieldset>' +
+      '<fieldset class="campo"><legend>Archivos adjuntos (billetes, reservas, mapas…)</legend><div class="f-adj">' + listaAdjuntos(v) + '</div>' +
+      '<button type="button" class="pill" data-f="adjuntar">' + ico('clip') + 'Adjuntar imagen o PDF</button></fieldset>' +
       '<p class="error" role="alert" hidden></p>' +
-      '<div class="h-pie"><button type="button" class="pill peligro" data-f="borrar"><span>Quitar viaje</span></button>' +
-      '<button type="button" class="pill" data-f="cancelar">Cancelar</button><button type="submit" class="pill pri">Guardar</button></div></form>';
+      '<div class="h-pie">' + (v.nueva ? '' : '<button type="button" class="pill peligro" data-f="borrar"><span>Quitar viaje</span></button>') +
+      '<button type="button" class="pill" data-f="cerrar">Cancelar</button><button type="submit" class="pill pri">Guardar</button></div></form>';
   }
   function ficha(v, num, total) {
-    const fs = conFoto(v), n = dias(v), a = aFecha(v.desde), b = aFecha(v.hasta) || a, abierta = fichaAbierta === v.id;
+    const fs = conFoto(v), n = dias(v), a = aFecha(v.desde), b = aFecha(v.hasta) || a;
     const lug = lugaresDe(v), adj = adjuntosDe(v);
     let h = '<article class="fi" id="ficha-' + v.id + '" data-id="' + v.id + '" role="group" aria-label="Viaje ' + num + ' de ' + total + '">' +
       '<div class="fi-cab"><span class="num-v" aria-hidden="true"><small>Viaje</small><span class="fi-n">' + num + '</span></span><span class="fi-t">' + ico('reloj') + cuando(v) + '</span></div>' +
@@ -1072,8 +1075,7 @@
     h += '<hr class="fi-hr"><div class="fi-adj">' + (adj.length ? adj.map((x, j) => adjuntoFila(v, x, j)).join('') : '<p class="fi-nof">Sin archivos adjuntos todavía</p>') + '</div>';
     if (editando) {
       h += '<div class="fi-bar"><button type="button" class="ib" data-adjuntar="' + v.id + '" aria-label="Adjuntar archivo a ' + esc(v.titulo) + '" title="Adjuntar archivo">' + ico('clip') + '</button>' +
-        '<button type="button" class="pill fi-mod" data-modificar="' + v.id + '" aria-expanded="' + abierta + '">Modificar<i class="chv" aria-hidden="true"></i></button></div>';
-      if (abierta) h += '<div class="fi-pan">' + formFicha(v) + '</div>';
+        '<button type="button" class="pill fi-mod" data-modificar="' + v.id + '" aria-haspopup="dialog">' + ico('lapiz') + 'Modificar</button></div>';
     }
     return h + '</article>';
   }
@@ -1281,7 +1283,7 @@
       h += '<div class="pills acciones">' +
         '<button type="button" class="pill pri" data-accion="fotos">' + ico('foto') + 'Añadir fotos</button>' +
         '<button type="button" class="pill" data-accion="punto">' + ico('diana') + 'Nuevo punto</button>' +
-        '<a class="pill" href="#ficha/' + v.id + '">' + ico('lapiz') + 'Editar ficha</a></div>' +
+        '<button type="button" class="pill" data-modificar="' + v.id + '" aria-haspopup="dialog">' + ico('lapiz') + 'Editar ficha</button></div>' +
         '<p class="nota">Añadir fotos te deja elegir de la <b>Fototeca</b>, hacer una con la <b>cámara</b> o cogerlas de <b>Archivos</b> (iCloud Drive, Google Drive…). En el ordenador también puedes arrastrarlas aquí. ' +
         'Arrastra los puntos del mapa para corregirlos.' +
         (sinUbic ? ' <b>' + plural(sinUbic, 'foto no tiene', 'fotos no tienen') + ' ubicación</b>: ábrela y pulsa «Colocar en el mapa».' : '') +
@@ -1315,7 +1317,7 @@
   }
 
   function pintarPanel(vista, v, forzar) {
-    const key = vista + ':' + (v ? v.id : '') + ':' + filtro + ':' + editando + ':' + fichaAbierta + ':' + modo;
+    const key = vista + ':' + (v ? v.id : '') + ':' + filtro + ':' + editando + ':' + modo;
     if (key === vistaKey && !forzar) return;
     const cambiaVista = vistaKey.split(':').slice(0, 2).join(':') !== key.split(':').slice(0, 2).join(':');
     const pista = $('.pista', panel), x = pista ? pista.scrollLeft : 0;
@@ -1342,7 +1344,7 @@
     if (history.state && history.state.capa) history.back();
     else ir(base, true, {});
   }
-  const CAPAS = /^#(punto|nuevo-punto|privado)\b/;
+  const CAPAS = /^#(ficha|punto|nuevo-punto|privado)\b/;
   function aplicar() {
     if (location.hash === aplicado) return;
     aplicado = location.hash;
@@ -1350,12 +1352,11 @@
     cerrarMenu();
     const r = ruta();
     const v = /^(v|ficha|punto|nuevo-punto)$/.test(r.tipo) ? porId(r.id) : null;
+    const fv = r.tipo === 'ficha' ? (v || (fichaEd && fichaEd.id === r.id ? fichaEd : null)) : null;
     if (r.tipo === 'ficha') {
-      if (v && editando) fichaAbierta = v.id;
-      fichaVer = v ? v.id : null;
-      tab = 'viajes';
-      seguir = true;
-      pintarPanel('inicio', null, true);
+      /* Modificar se abre encima de lo que hubiera; si no se puede editar, se vuelve atrás */
+      if (!fv || !editando || modo !== 'mios') { ir(viajeActual ? '#v/' + viajeActual.id : HASH[tab], true, {}); return; }
+      if (!vistaKey) pintarPanel('inicio', null);
     } else if (r.tipo === 'favoritos') {
       history.replaceState(history.state, '', location.pathname + location.search);
       aplicado = location.hash;
@@ -1371,6 +1372,7 @@
     const pf = r.tipo === 'v' && v && r.p ? puntoDe(v, r.p) : null;
     if (pf && pf.f) mostrarVisor(v, pf); else ocultarVisor();
     if (r.tipo === 'privado') abrirPrivado();
+    else if (r.tipo === 'ficha') abrirFicha(fv);
     else if (r.tipo === 'punto' && v && puntoDe(v, r.p)) abrirPunto(v, puntoDe(v, r.p));
     else if (r.tipo === 'nuevo-punto' && v) abrirPunto(v, null);
     else ocultarHoja();
@@ -1590,6 +1592,8 @@
   function ocultarHoja() {
     if (ed && ed.nueva) URL.revokeObjectURL(ed.nueva.url);
     ed = null;
+    if (fichaEd && fichaEd.nueva) adjuntosDe(fichaEd).forEach(a => soltar(a.f)); /* viaje nuevo sin guardar: fuera sus archivos */
+    fichaEd = null;
     if (hoja.hidden) return;
     hoja.hidden = true;
     hModo = '';
@@ -1602,6 +1606,50 @@
     '<button type="button" class="ib" data-f="cerrar" aria-label="Cerrar">' + ico('x') + '</button></div>';
   const error = (cont, msg) => { const e = $('.error', cont); e.textContent = msg; e.hidden = false; };
 
+  function abrirFicha(v) {
+    if (hModo === 'ficha' && fichaEd === v) return;
+    fichaEd = v;
+    mostrarHoja(cabecera(v.nueva ? 'Nuevo viaje' : 'Modificar viaje') + formFicha(v), 'ficha');
+    if (v.nueva) $('[name="titulo"]', caja).focus();
+  }
+  function guardarFicha(form) {
+    const r = leerFicha(form);
+    if (r.error) { error(form, r.error); if (r.foco) form.elements[r.foco].focus(); return; }
+    const v = fichaEd, d = r.d, nuevo = !!v.nueva;
+    if (nuevo) {
+      if (!adjuntosDe(v).length) v.id = idLibre(slug(d.titulo) + (d.desde ? '-' + d.desde.slice(0, 4) : ''));
+      delete v.nueva;
+      datos.push(v);
+    }
+    ['titulo', 'lugar', 'itinerario', 'desde', 'hasta', 'texto'].forEach(c => { if (d[c]) v[c] = d[c]; else if (c !== 'titulo') delete v[c]; });
+    if (d.enlaces.length) v.enlaces = d.enlaces; else delete v.enlaces;
+    if (form.dataset.lat) { v.lat = +form.dataset.lat; v.lng = +form.dataset.lng; } else { delete v.lat; delete v.lng; }
+    guardar();
+    const desde = viajeActual;
+    cerrarCapa(baseHoja());
+    if (desde && !nuevo) pintarPanel('viaje', desde, true);
+    else { fichaVer = v.id; seguir = true; tab = 'viajes'; pintarPanel('inicio', null, true); }
+    toast(nuevo ? 'Viaje creado' : 'Viaje guardado');
+  }
+  /* Quitar un adjunto (desde la ficha o desde Modificar) */
+  function quitarAdjunto(v, j, b) {
+    if (b.dataset.ok !== '1') { b.dataset.ok = '1'; b.classList.add('peligro'); b.setAttribute('aria-label', 'Toca otra vez para quitar'); return; }
+    const x = v.adjuntos[j];
+    v.adjuntos.splice(j, 1);
+    if (!v.adjuntos.length) delete v.adjuntos;
+    soltar(x.f);
+    refrescarAdjuntos(v);
+    toast('Archivo quitado');
+  }
+  function refrescarAdjuntos(v) {
+    if (!v.nueva) {
+      guardar();
+      fichaVer = v.id;
+      if (!viajeActual) pintarPanel('inicio', null, true);
+    }
+    const lista = hModo === 'ficha' && fichaEd === v && $('.f-adj', caja);
+    if (lista) lista.innerHTML = listaAdjuntos(v); /* solo la lista: lo escrito en el formulario se queda */
+  }
   function abrirPrivado() {
     if (hModo === 'privado') return;
     let h;
@@ -1723,12 +1771,19 @@
     if (modo === 'mios' && datos.length) { toast('Para sustituir tus viajes, usa el botón «Restaurar una copia».'); return; }
     restaurar(fs);
   });
-  hoja.addEventListener('submit', e => { e.preventDefault(); if (hModo === 'punto') guardarPunto(); });
+  hoja.addEventListener('submit', e => {
+    e.preventDefault();
+    if (hModo === 'punto') guardarPunto();
+    else if (hModo === 'ficha') guardarFicha(e.target.closest('.fi-form'));
+  });
   hoja.addEventListener('click', e => {
     if (e.target === hoja) { cerrarCapa(baseHoja()); return; }
+    const qa = e.target.closest('[data-adj-quitar]');
+    if (qa && fichaEd) { quitarAdjunto(fichaEd, +qa.dataset.adjQuitar.split('/')[1], qa); return; }
     const b = e.target.closest('[data-f]');
     if (!b) return;
     const a = b.dataset.f;
+    if (hModo === 'ficha' && accionFicha(a, b)) return;
     if (a === 'cerrar') cerrarCapa(baseHoja());
     else if (a === 'descargar-copia') descargarCopia();
     else if (a === 'compartir-copia') compartirCopia();
@@ -1779,6 +1834,39 @@
   });
 
   /* ===================== Fichas: modificar, añadir, adjuntar ===================== */
+  /* Botones del formulario de Modificar; devuelve true si la acción era suya */
+  function accionFicha(a, b) {
+    const form = $('.fi-form', caja), v = fichaEd;
+    if (!form || !v) return false;
+    if (a === 'adjuntar') { adjuntarA = v; modoEntrada = 'adjunto'; abrirEntrada('image/*,application/pdf', true); }
+    else if (a === 'mas-enl') {
+      $('.f-enlaces', form).insertAdjacentHTML('beforeend', filaEnlace({ t: '', u: '' }));
+      $('.f-enl:last-child input', form).focus();
+    } else if (a === 'quitar-enl') b.parentElement.remove();
+    else if (a === 'desde-puntos') {
+      const c = centroPuntos(v);
+      form.dataset.lat = c.lat; form.dataset.lng = c.lng;
+      $('.f-pos', form).textContent = textoPos(c);
+    } else if (a === 'elegir') {
+      const ini = form.dataset.lat ? { lat: +form.dataset.lat, lng: +form.dataset.lng } : posicion(v);
+      elegir(ini, pos => {
+        if (pos) { form.dataset.lat = pos.lat; form.dataset.lng = pos.lng; $('.f-pos', form).textContent = textoPos(pos); }
+        b.focus({ preventScroll: true });
+      });
+    } else if (a === 'borrar') {
+      if (b.dataset.ok !== '1') { b.dataset.ok = '1'; $('span', b).textContent = '¿Seguro? Toca otra vez'; return true; }
+      puntosDe(v).forEach(q => soltar(q.f));
+      adjuntosDe(v).forEach(q => soltar(q.f));
+      datos.splice(datos.indexOf(v), 1);
+      guardar();
+      fichaEd = null;
+      const volver = viajeActual === v;
+      cerrarCapa('#');
+      if (volver) ir('#', true, {}); else pintarPanel('inicio', null, true);
+      toast('Viaje quitado');
+    } else return false;
+    return true;
+  }
   function leerFicha(form) {
     const val = n => form.elements[n].value.trim();
     const d = {
@@ -1795,26 +1883,6 @@
     while (porId(id)) id = base + '-' + k++;
     return id;
   }
-  panel.addEventListener('submit', e => {
-    const form = e.target.closest('.fi-form');
-    if (!form) return;
-    e.preventDefault();
-    const r = leerFicha(form);
-    if (r.error) { error(form, r.error); if (r.foco) form.elements[r.foco].focus(); return; }
-    const v = porId(form.dataset.id), d = r.d;
-    if (v.nueva && !puntosDe(v).length && !adjuntosDe(v).length) { v.id = idLibre(slug(d.titulo) + (d.desde ? '-' + d.desde.slice(0, 4) : '')); }
-    delete v.nueva;
-    ['titulo', 'lugar', 'itinerario', 'desde', 'hasta', 'texto'].forEach(c => { if (d[c]) v[c] = d[c]; else if (c !== 'titulo') delete v[c]; });
-    if (d.enlaces.length) v.enlaces = d.enlaces; else delete v.enlaces;
-    if (form.dataset.lat) { v.lat = +form.dataset.lat; v.lng = +form.dataset.lng; } else { delete v.lat; delete v.lng; }
-    guardar();
-    fichaAbierta = null;
-    fichaVer = v.id;
-    seguir = true;
-    pintarPanel('inicio', null, true);
-    toast('Viaje guardado');
-  });
-
   const entrada = $('#fotos-in');
   let modoEntrada = 'viaje', adjuntarA = null;
   function abrirEntrada(accept, multiple) {
@@ -1825,14 +1893,9 @@
   }
   function nuevoViaje() {
     if (modo !== 'mios') { ir('#privado', false, { capa: true }); return; }
-    if (!editando) ponerEdicion(true);
-    const v = { id: idLibre('nuevo-viaje'), titulo: 'Nuevo viaje', puntos: [], nueva: true };
-    datos.push(v);
-    fichaAbierta = v.id;
-    fichaVer = v.id;
-    pintarPanel('inicio', null, true);
-    const i = $('#ficha-' + v.id + ' [name="titulo"]');
-    if (i) { i.focus({ preventScroll: true }); i.select(); }
+    if (!editando) { ponerEdicion(true); pintarPanel(viajeActual ? 'viaje' : 'inicio', viajeActual); }
+    fichaEd = { id: idLibre('nuevo-viaje'), titulo: 'Nuevo viaje', puntos: [], nueva: true }; /* entra en datos al guardar */
+    ir('#ficha/' + fichaEd.id, false, { capa: true });
   }
   panel.addEventListener('click', e => {
     const t = e.target;
@@ -1858,65 +1921,12 @@
     const dot = t.closest('[data-ir]');
     if (dot) { const f = $('.pista', panel).children[+dot.dataset.ir]; if (f) enfocarFicha(f); return; }
     const mod = t.closest('[data-modificar]');
-    if (mod) {
-      const id = mod.dataset.modificar;
-      if (fichaAbierta === id) { const v = porId(id); if (v && v.nueva) { datos.splice(datos.indexOf(v), 1); } fichaAbierta = null; }
-      else fichaAbierta = id;
-      fichaVer = id;
-      pintarPanel('inicio', null, true);
-      return;
-    }
+    if (mod) { ir('#ficha/' + mod.dataset.modificar, false, { capa: true }); return; }
     if (t.closest('[data-nuevo-viaje]')) { nuevoViaje(); return; }
     const adj = t.closest('[data-adjuntar]');
     if (adj) { adjuntarA = porId(adj.dataset.adjuntar); modoEntrada = 'adjunto'; abrirEntrada('image/*,application/pdf', true); return; }
     const qa = t.closest('[data-adj-quitar]');
-    if (qa) {
-      if (qa.dataset.ok !== '1') { qa.dataset.ok = '1'; qa.classList.add('peligro'); qa.setAttribute('aria-label', 'Toca otra vez para quitar'); return; }
-      const [id, j] = qa.dataset.adjQuitar.split('/'), v = porId(id), x = v.adjuntos[+j];
-      v.adjuntos.splice(+j, 1);
-      if (!v.adjuntos.length) delete v.adjuntos;
-      soltar(x.f);
-      guardar();
-      fichaVer = id;
-      pintarPanel('inicio', null, true);
-      toast('Archivo quitado');
-      return;
-    }
-    const form = t.closest('.fi-form');
-    const b = t.closest('[data-f]');
-    if (form && b) {
-      const a = b.dataset.f, v = porId(form.dataset.id);
-      if (a === 'cancelar') {
-        if (v.nueva) datos.splice(datos.indexOf(v), 1);
-        fichaAbierta = null;
-        fichaVer = v.nueva ? null : v.id;
-        pintarPanel('inicio', null, true);
-      } else if (a === 'mas-enl') {
-        $('.f-enlaces', form).insertAdjacentHTML('beforeend', filaEnlace({ t: '', u: '' }));
-        $('.f-enl:last-child input', form).focus();
-      } else if (a === 'quitar-enl') b.parentElement.remove();
-      else if (a === 'desde-puntos') {
-        const c = centroPuntos(v);
-        form.dataset.lat = c.lat; form.dataset.lng = c.lng;
-        $('.f-pos', form).textContent = textoPos(c);
-      } else if (a === 'elegir') {
-        const ini = form.dataset.lat ? { lat: +form.dataset.lat, lng: +form.dataset.lng } : posicion(v);
-        elegir(ini, pos => {
-          if (pos) { form.dataset.lat = pos.lat; form.dataset.lng = pos.lng; $('.f-pos', form).textContent = textoPos(pos); }
-          b.focus({ preventScroll: true });
-        });
-      } else if (a === 'borrar') {
-        if (b.dataset.ok !== '1') { b.dataset.ok = '1'; $('span', b).textContent = '¿Seguro? Toca otra vez'; return; }
-        puntosDe(v).forEach(q => soltar(q.f));
-        adjuntosDe(v).forEach(q => soltar(q.f));
-        datos.splice(datos.indexOf(v), 1);
-        if (!v.nueva) guardar();
-        fichaAbierta = null;
-        pintarPanel('inicio', null, true);
-        toast('Viaje quitado');
-      }
-      return;
-    }
+    if (qa) { const [id, j] = qa.dataset.adjQuitar.split('/'); quitarAdjunto(porId(id), +j, qa); return; }
     const lu = t.closest('[data-lugar]');
     if (lu) {
       const o = puntoDe(viajeActual, lu.dataset.lugar);
@@ -2055,7 +2065,6 @@
   }
   async function anadirAdjuntos(v, files) {
     v.adjuntos = adjuntosDe(v);
-    delete v.nueva;
     let ok = 0, fallos = 0;
     for (const file of files) {
       try {
@@ -2070,9 +2079,7 @@
       } catch (e) { fallos++; }
     }
     if (!v.adjuntos.length) delete v.adjuntos;
-    if (ok) guardar();
-    fichaVer = v.id;
-    pintarPanel('inicio', null, true);
+    if (ok) refrescarAdjuntos(v);
     toast(plural(ok, 'archivo adjuntado', 'archivos adjuntados') + (fallos ? ' · ' + fallos + ' no válidos (solo imágenes y PDF de hasta 20 MB)' : ''));
   }
 
@@ -2089,12 +2096,8 @@
     if (modo !== 'mios') { ir('#privado', false, { capa: true }); return; }
     ponerEdicion(!editando);
     mapa.cerrarVentana();
-    if (!editando) {
-      datos.filter(v => v.nueva).forEach(v => datos.splice(datos.indexOf(v), 1));
-      fichaAbierta = null;
-    }
     pintarPanel(viajeActual ? 'viaje' : 'inicio', viajeActual);
-    if (!editando && /^#(punto|nuevo-punto)/.test(location.hash)) cerrarCapa(baseHoja());
+    if (!editando && /^#(ficha|punto|nuevo-punto)/.test(location.hash)) cerrarCapa(baseHoja());
   });
   $('#b-copia').addEventListener('click', () => ir('#privado', false, { capa: true }));
   document.addEventListener('keydown', e => {

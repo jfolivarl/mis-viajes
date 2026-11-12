@@ -1,7 +1,7 @@
 {
   "name": "Mis viajes",
   "short_name": "Mis viajes",
-  "description": "Fichas, mapa y fotos de viajes. Los propios se guardan solo en el dispositivo.",
+  "description": "Álbum interactivo de viajes en forma de visor: mapa, fichas y fotos.",
   "lang": "es",
   "start_url": "./",
   "scope": "./",

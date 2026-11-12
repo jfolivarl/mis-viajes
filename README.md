@@ -1,11 +1,11 @@
 # Mis viajes
 
-Fichas, mapa y fotos de viajes. Web estática para GitHub Pages: https://jfolivarl.github.io/mis-viajes/
+Álbum interactivo de viajes en forma de visor: mapa, fichas y fotos. Web estática para GitHub Pages: https://jfolivarl.github.io/mis-viajes/
 
 ## Dos caras
 
 - **Pública (este repositorio):** enseña unos **viajes de ejemplo** con fotos de lugares (`viajes.js` y los `.jpg`).
-- **Privada (solo en tu dispositivo):** al pulsar **Empezar con mis viajes**, tus viajes, fotos y adjuntos se guardan **solo en ese iPhone**. No se suben a GitHub ni a ningún servidor.
+- **Privada (solo en tu dispositivo):** al pulsar **Empezar con mis viajes**, tus viajes, fotos y adjuntos se guardan **solo en ese dispositivo** (iPhone, Android u ordenador). No se suben a GitHub ni a ningún servidor.
 
 ## Copia de seguridad (importante)
 
@@ -29,21 +29,28 @@ Si se borra la app o los datos del navegador, lo guardado se pierde: la copia es
 
 ## Cómo se usa
 
-- **Viajes / Fotos / Favoritos:** las tres casillas son pestañas; también se cambia deslizando a los lados. Al tocarlas, la página baja hasta el contenido.
-- **Favoritas (corazón):** solo para fotos; se marca en el visor de la foto. El corazón del mapa deja solo las fotos favoritas; en Fotos hay un filtro de corazón junto a los años, que se pasan con las flechas.
-- **Viajes:** carrusel de fichas. El mapa enseña el viaje de la ficha que tienes delante. Al final, la ficha punteada **Añadir viaje**.
-- **Filtro del mapa** (embudo): elegir un viaje o verlos todos.
-- **Título de la ficha** o «N fotos y mapa»: abre el viaje con su galería.
+- **Pestañas:** Viajes y Fotos se cambian tocando o deslizando a los lados. Al tocarlas, la página baja hasta el contenido.
+- **Modo corazón:** el corazón de las pestañas, el del mapa y el del filtro de Fotos son el mismo interruptor. Encendido, el mapa enseña solo las fotos favoritas, las demás miniaturas se atenúan y las favoritas llevan el corazón turquesa. Tocando cualquier corazón se apaga en toda la app. Una foto se marca como favorita desde su visor.
+- **Números de viaje:** cronológicos: el más antiguo es el 1 y el más reciente el último. Son los mismos en fichas, Fotos y el menú «Ver viajes», y en fichas y Fotos van con la palabra «Viaje».
+- **Botones del mapa:** a la derecha, búsqueda, capas, corazón y «Ver viajes». Al activarse, búsqueda, pantalla completa y «Ver viajes» crecen un poco y el corazón algo más; capas, acercar, alejar y el planeta solo se iluminan.
+- **Viajes:** carrusel de fichas. El mapa enseña el viaje (o sus favoritas, en modo corazón) de la ficha que tienes delante. Al final, la ficha punteada **Añadir viaje**. En tablet y ordenador hay botones Anterior y Siguiente.
+- **Ver viajes** (embudo del mapa): elegir un viaje o verlos todos. Cuando el mapa enseña un solo viaje, el botón crece y se rellena.
+- **Título de la ficha** o «N fotos y mapa»: abre el viaje con su galería. Dentro de un viaje, los botones de abajo, deslizar a los lados (móvil) o las flechas del teclado (ordenador) pasan al viaje anterior o al siguiente.
+- **Fotos:** viajes por años con su número de viaje («Viaje 1», «Viaje 2»…). Las flechas de los años (o deslizar el dedo sobre ellos) seleccionan el año de al lado, de uno en uno: Todos › 2025 › 2024…
 - **Ampliar una foto:** en el visor, con la lupa, doble toque, pellizco o la rueda del ratón; arrastra para moverla. Las fotos nuevas se guardan a 2560 px para que se vean nítidas.
 - **Editar:** Modificar la ficha, adjuntar imágenes o PDF (clip), añadir fotos, crear puntos, arrastrar marcadores.
 - **Añadir fotos:** Fototeca, cámara o Archivos. Para que lleven ubicación: Fotos › Compartir › Opciones › **Ubicación** › Guardar en Archivos, y elegirlas con Explorar. Las que no la tengan: abrirlas › **Colocar en el mapa**.
-- **Mapa base:** el botón de capas abre un menú con Gris oscuro (el de siempre), Gris claro, Callejero y Satélite.
+- **Mapa base:** el botón de capas abre un menú con muestras de color: Azul (el de siempre, a juego con la app), Gris oscuro, Gris claro, Callejero, Relieve y Satélite.
 - La app es **siempre oscura**, tenga el dispositivo el modo que tenga.
-- En el ordenador el panel de la izquierda tiene su propio scroll y el carrusel lleva botones Anterior y Siguiente.
-- **Pantalla completa:** botón de las flechas hacia fuera; al tocar un viaje sale su ventana con la portada y el enlace a sus fotos. Se sale con el mismo botón o con Escape.
+- En el ordenador el panel de la izquierda tiene su propio scroll.
+- **Pantalla completa:** botón de las flechas hacia fuera (crece y las flechas miran hacia dentro al activarlo); al tocar un viaje sale su ventana con la portada y el enlace a sus fotos. El logo del mapa hace de botón del planeta. Se sale con el mismo botón o con Escape.
 - El mapa lleva **norte y escala** abajo a la izquierda.
 - **Buscar** (lupa): escribe una dirección o un lugar y pulsa Buscar. Al elegir un resultado aparece un marcador de ubicación; desde su ventana se añade como punto a un viaje (y ahí se le pone nombre, fecha, comentario y foto). Necesita conexión.
 - **Pasar un punto a otro viaje:** Editar punto › campo «Viaje».
+
+## Al actualizar la app
+
+En `index.html`, los archivos llevan un número de versión (`main.js?v=20261112f`). Cada vez que se cambie `main.js`, `style.css` o `viajes.js`, hay que cambiar ese número en `index.html` y subirlo también: así los móviles cargan la versión nueva en vez de la guardada.
 
 ## Cambiar los ejemplos
 
@@ -51,4 +58,4 @@ Editar `viajes.js` (títulos, fechas, textos, coordenadas) y subir las fotos nue
 
 ## Mapa
 
-Leaflet con fondos grises y satélite de © Esri y callejero de © OpenStreetMap. Búsqueda con Photon y Nominatim (datos de OpenStreetMap).
+Leaflet con fondos azul, grises, relieve y satélite de © Esri y callejero de © OpenStreetMap. El azul es el gris oscuro de Esri teñido con el color de la app. Búsqueda con Photon y Nominatim (datos de OpenStreetMap).

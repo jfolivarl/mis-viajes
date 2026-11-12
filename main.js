@@ -1,4 +1,4 @@
-/* Mis viajes · Juan Felipe e Inés
+/* Mis viajes · álbum interactivo de viajes en forma de visor
    Dos caras: la pública enseña viajes de ejemplo (viajes.js del repositorio) y la
    privada guarda tus viajes y fotos solo en este dispositivo (IndexedDB), con copia
    de seguridad en un zip. Mapa con Leaflet, fichas en carrusel y visor de fotos. */
@@ -146,6 +146,12 @@
 
   const porId = id => datos.find(v => v.id === id);
   const ordenados = () => datos.slice().sort((a, b) => cmp(b.desde || '', a.desde || ''));
+  /* Número de cada viaje por orden cronológico: el más antiguo es el 1 y el más reciente el último.
+     Los que aún no tienen fecha van detrás, en el orden en que se crearon. */
+  function numeros() {
+    const conFecha = datos.filter(v => v.desde).sort((a, b) => cmp(a.desde, b.desde));
+    return new Map(conFecha.concat(datos.filter(v => !v.desde)).map((v, i) => [v.id, i + 1]));
+  }
   const puntosDe = v => v.puntos || [];
   const adjuntosDe = v => v.adjuntos || [];
   const conFoto = v => puntosDe(v).filter(p => p.f);
@@ -201,37 +207,42 @@
     const OSM = '© <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">OpenStreetMap</a>';
     /* Fondos grises de Esri (Canvas): sin clave, con su capa de nombres encima */
     const ESRI = 'https://server.arcgisonline.com/ArcGIS/rest/services/';
-    const gris = estilo => L.layerGroup([
+    const gris = (estilo, clase) => L.layerGroup([
       L.tileLayer(ESRI + 'Canvas/World_' + estilo + '_Gray_Base/MapServer/tile/{z}/{y}/{x}', {
-        maxNativeZoom: 16, maxZoom: 19,
+        maxNativeZoom: 16, maxZoom: 19, className: clase || '',
         attribution: '© <a href="https://www.esri.com" target="_blank" rel="noopener">Esri</a>, HERE, Garmin · ' + OSM
       }),
-      L.tileLayer(ESRI + 'Canvas/World_' + estilo + '_Gray_Reference/MapServer/tile/{z}/{y}/{x}', { maxNativeZoom: 16, maxZoom: 19 })
+      L.tileLayer(ESRI + 'Canvas/World_' + estilo + '_Gray_Reference/MapServer/tile/{z}/{y}/{x}', { maxNativeZoom: 16, maxZoom: 19, className: clase || '' })
     ]);
     const capas = {
+      azul: gris('Dark', 'capa-azul'), /* el gris oscuro teñido con el azul de la app */
       oscuro: gris('Dark'),
       claro: gris('Light'),
       calle: L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 19, attribution: OSM }),
+      relieve: L.tileLayer(ESRI + 'World_Topo_Map/MapServer/tile/{z}/{y}/{x}', {
+        maxZoom: 19,
+        attribution: '© <a href="https://www.esri.com" target="_blank" rel="noopener">Esri</a>, HERE, Garmin, USGS · ' + OSM
+      }),
       satelite: L.layerGroup([
-        L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', {
+        L.tileLayer(ESRI + 'World_Imagery/MapServer/tile/{z}/{y}/{x}', {
           maxZoom: 19,
           attribution: 'Imágenes © <a href="https://www.esri.com" target="_blank" rel="noopener">Esri</a>, Maxar, Earthstar Geographics'
         }),
-        L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/Reference/World_Boundaries_and_Places/MapServer/tile/{z}/{y}/{x}', { maxZoom: 19 })
+        L.tileLayer(ESRI + 'Reference/World_Boundaries_and_Places/MapServer/tile/{z}/{y}/{x}', { maxZoom: 19 })
       ])
     };
-    const NOMBRES = { oscuro: 'Gris oscuro', claro: 'Gris claro', calle: 'Callejero', satelite: 'Satélite' };
-    let base = 'oscuro'; /* el fondo gris oscuro no compite con las fotos */
-    try { const g = localStorage.getItem('mis-viajes.capa'); if (capas[g]) base = g; } catch (e) { /* sin almacenamiento */ }
+    const NOMBRES = { azul: 'Azul', oscuro: 'Gris oscuro', claro: 'Gris claro', calle: 'Callejero', relieve: 'Relieve', satelite: 'Satélite' };
+    let base = 'azul'; /* el fondo azul combina con la app y no compite con las fotos */
+    try { const g = localStorage.getItem('mis-viajes.base'); if (capas[g]) base = g; } catch (e) { /* sin almacenamiento */ }
     const ponerBase = k => {
       if (capas[base]) map.removeLayer(capas[base]);
       base = k;
       capas[base].addTo(map);
-      el.classList.toggle('base-osc', base === 'oscuro' || base === 'satelite');
-      try { localStorage.setItem('mis-viajes.capa', base); } catch (e) { /* sin almacenamiento */ }
+      el.classList.toggle('base-osc', base === 'azul' || base === 'oscuro' || base === 'satelite');
+      const sw = el.querySelector('[data-m="capa"] .sw');
+      if (sw) sw.dataset.b = base;
+      try { localStorage.setItem('mis-viajes.base', base); } catch (e) { /* sin almacenamiento */ }
     };
-    ponerBase(base);
-
     const izq = L.DomUtil.create('div', 'm-ctrl m-izq', el);
     izq.innerHTML =
       '<button type="button" data-m="mas" aria-label="Acercar">' + ico('mas') + '</button>' +
@@ -241,10 +252,11 @@
     const ctrl = L.DomUtil.create('div', 'm-ctrl', el);
     ctrl.innerHTML =
       '<button type="button" data-m="buscar" aria-label="Buscar una dirección o un lugar" aria-expanded="false">' + ico('lupa') + '</button>' +
-      '<button type="button" data-m="capa" aria-label="Elegir el mapa base" aria-haspopup="true" aria-expanded="false">' + ico('capas') + '</button>' +
-      '<button type="button" data-m="filtro" aria-label="Filtrar el mapa por viaje" aria-haspopup="true" aria-expanded="false">' + ico('filtro') + '</button>' +
-      '<button type="button" class="cz" data-m="fav" aria-label="Ver solo las fotos favoritas en el mapa" aria-pressed="false">' + ico('corazon') + '</button>';
-    const bFav = ctrl.lastChild;
+      '<button type="button" data-m="capa" aria-label="Elegir el mapa base" aria-haspopup="true" aria-expanded="false">' + ico('capas') + '<span class="sw sw-mini" aria-hidden="true"><i></i></span></button>' +
+      '<button type="button" class="cz" data-m="fav" aria-label="Modo corazón: ver solo las fotos favoritas" aria-pressed="false">' + ico('corazon') + '</button>' +
+      '<button type="button" data-m="filtro" aria-label="Ver viajes" title="Ver viajes" aria-haspopup="true" aria-expanded="false" aria-pressed="false">' + ico('filtro') + '</button>';
+    const bFav = ctrl.querySelector('[data-m="fav"]'), bFiltro = ctrl.querySelector('[data-m="filtro"]');
+    ponerBase(base);
     [izq, ctrl].forEach(c => { L.DomEvent.disableClickPropagation(c); L.DomEvent.disableScrollPropagation(c); });
     L.DomUtil.create('div', 'm-cruz', el).innerHTML = ico('diana');
     /* Escala y norte, abajo a la izquierda */
@@ -305,6 +317,11 @@
       const b = e.target.closest('[data-m]');
       if (!b) return;
       const a = b.dataset.m;
+      if (a === 'mas' || a === 'menos' || a === 'todo') { /* acciones de un toque: se iluminan un instante, sin crecer */
+        b.classList.add('pulso');
+        clearTimeout(b.tPulso);
+        b.tPulso = setTimeout(() => b.classList.remove('pulso'), 350);
+      }
       if (a === 'mas') map.zoomIn();
       else if (a === 'menos') map.zoomOut();
       else if (a === 'todo') { if (api.verTodo) api.verTodo(); }
@@ -327,7 +344,13 @@
       alCapa: null,
       bases: () => Object.keys(capas).map(k => ({ k, nombre: NOMBRES[k], activa: k === base })),
       base: ponerBase,
-      favorito(on) { bFav.setAttribute('aria-pressed', on); },
+      favorito(on) { bFav.setAttribute('aria-pressed', on); bFav.setAttribute('aria-label', on ? 'Quitar el modo corazón' : 'Modo corazón: ver solo las fotos favoritas'); },
+      /* El botón del filtro crece cuando el mapa enseña un solo viaje */
+      filtrado(v) {
+        bFiltro.setAttribute('aria-pressed', !!v);
+        bFiltro.setAttribute('aria-label', v ? 'Viaje en el mapa: ' + v + '. Toca para ver viajes' : 'Ver viajes');
+        bFiltro.title = v ? v : 'Ver viajes';
+      },
       tam() { map.invalidateSize({ pan: false }); },
       zoom: () => map.getZoom(),
       centro() { const c = map.getCenter().wrap(); return { lat: +c.lat.toFixed(5), lng: +c.lng.toFixed(5) }; },
@@ -675,7 +698,7 @@
   const panel = $('#panel');
   let filtro = '', vistaKey = '', viajeActual = null, fichaAbierta = null, fichaVer = null;
   let tab = 'viajes', seguir = true, enMapa = null, soloFav = false;
-  const TABS = ['viajes', 'fotos', 'favs'], HASH = { viajes: '#', fotos: '#fotos', favs: '#favoritos' };
+  const TABS = ['viajes', 'fotos'], HASH = { viajes: '#', fotos: '#fotos' };
   const esFav = v => puntosDe(v).some(p => p.fav); /* los favoritos son solo de fotos */
   const nFav = () => datos.reduce((n, v) => n + puntosDe(v).filter(p => p.fav).length, 0);
   function guardarFav() {
@@ -700,7 +723,7 @@
   });
 
   function pintarCabecera() {
-    $('#subtitulo').textContent = modo === 'mios' ? 'Juan Felipe e Inés' : 'Viajes de ejemplo';
+    $('#subtitulo').textContent = modo === 'mios' ? 'Álbum de viajes' : 'Viajes de ejemplo';
     $('#b-copia').setAttribute('aria-label', modo === 'mios' ? 'Copia de seguridad' : 'Mis viajes privados');
   }
   function pintarAviso() {
@@ -748,6 +771,7 @@
     });
     mapa.ruta(null);
     mapa.cerrarVentana();
+    mapa.filtrado(null);
     mapa.marcas(pts, items => items[0].p ? marcaPunto(items) : marcaViaje(items), grupo => {
       if (grupo.length > 1 && mapa.zoom() <= 15) mapa.ajustar(grupo, 16);
       else if (grupo[0].p) abrirFoto(grupo[0].v, grupo[0].p.id);
@@ -764,8 +788,9 @@
   function mapaViaje(v, ajustar) {
     enMapa = v.id;
     const todos = ubicados(v), favs = todos.filter(o => o.fav), p = posicion(v);
-    const g = soloFav && viajeActual && favs.length ? favs : todos;
+    const g = soloFav ? favs : todos; /* en modo corazón, solo las favoritas */
     mapa.cerrarVentana();
+    mapa.filtrado(v.titulo);
     mapa.ruta(g.length > 1 ? g.map(o => [o.lat, o.lng]) : null);
     if (g.length) {
       const pts = g.map(o => ({ id: o.id, lat: o.lat, lng: o.lng, p: o }));
@@ -808,29 +833,36 @@
   function tocarViaje(v) {
     if (full) { ventanaViaje(v); return; }
     const t = tab === 'viajes' && $('#ficha-' + v.id);
-    if (t) { seguir = true; irFicha(t); } else ir('#v/' + v.id);
+    if (t) enfocarFicha(t); else ir('#v/' + v.id);
   }
   function visFotos() {
-    const l = ordenados();
-    return filtro === 'fav' ? l.filter(esFav) : filtro ? l.filter(v => anio(v) === filtro) : l;
+    let l = ordenados();
+    if (soloFav) l = l.filter(esFav);
+    return filtro ? l.filter(v => anio(v) === filtro) : l;
   }
   function mapaInicio() {
-    if (tab === 'favs') { mapaTodos(datos, tocarViaje, true); return; }
-    if (tab === 'fotos') { mapaTodos(visFotos(), tocarViaje, soloFav || filtro === 'fav'); return; }
+    if (tab === 'fotos') { mapaTodos(visFotos(), tocarViaje, soloFav); return; }
     const f = fichaActual();
-    if (seguir && !soloFav && f && f.dataset.id) { mapaViaje(porId(f.dataset.id), true); return; }
+    if (seguir && f && f.dataset.id) { mapaViaje(porId(f.dataset.id), true); return; }
     mapaTodos(datos, tocarViaje, soloFav);
   }
-  mapa.alFav = () => {
-    if (!soloFav) {
-      if (viajeActual && !ubicados(viajeActual).some(p => p.fav)) { toast('Este viaje no tiene fotos favoritas en el mapa'); return; }
-      if (!viajeActual && !datos.some(esFav)) { toast('Aún no hay favoritas. Abre una foto y toca el corazón.'); return; }
-    }
-    soloFav = !soloFav;
-    mapa.favorito(soloFav);
-    if (viajeActual) mapaViaje(viajeActual, true); else mapaInicio();
-    toast(soloFav ? 'Mapa: solo favoritos' : 'Mapa: todo');
-  };
+  /* Modo corazón: un solo estado para el corazón del mapa, la pestaña y el filtro de Fotos.
+     Tocar cualquiera de ellos lo enciende o lo apaga en toda la app. */
+  function ponerFav(on) {
+    if (on && !datos.some(esFav)) { toast('Aún no hay favoritas. Abre una foto y toca el corazón.'); return; }
+    soloFav = on;
+    mapa.favorito(on);
+    document.body.classList.toggle('modo-fav', on);
+    if (viajeActual) pintarPanel('viaje', viajeActual, true); else pintarPanel('inicio', null, true);
+    toast(on ? 'Modo corazón: solo las fotos favoritas' : 'Modo corazón apagado');
+  }
+  mapa.alFav = () => ponerFav(!soloFav);
+  /* Cuando cambia una favorita desde el visor */
+  function refrescarFav(p) {
+    panel.querySelectorAll('.ft[data-p="' + p.id + '"]').forEach(f => f.classList.toggle('fav', !!p.fav));
+    if (soloFav && !datos.some(esFav)) { ponerFav(false); return; }
+    if (soloFav && viajeActual) mapaViaje(viajeActual, false);
+  }
 
   /* ---------- Buscar una dirección (Nominatim de OpenStreetMap) ---------- */
   const busca = $('#m-busca'), q = $('#m-q'), res = $('#m-res');
@@ -932,11 +964,11 @@
   mapa.alFiltro = b => { if (!menu.hidden && menuBoton === b) cerrarMenu(); else { cerrarBusca(); cerrarMenu(); abrirMenu(b); } };
   function abrirMenu(b) {
     menuBoton = b;
-    const actual = viajeActual ? viajeActual.id : enMapa;
-    menu.innerHTML = '<p class="m-menu-t">Ver en el mapa</p>' +
+    const actual = viajeActual ? viajeActual.id : enMapa, nums = numeros();
+    menu.innerHTML = '<p class="m-menu-t">Ver viajes</p>' +
       '<button type="button" data-filtro="" aria-pressed="' + !actual + '">' + ico('mundo') + 'Todos los viajes</button>' +
-      ordenados().map((v, i) => '<button type="button" data-filtro="' + v.id + '" aria-pressed="' + (actual === v.id) + '">' +
-        '<span class="m-menu-n">' + (i + 1) + '</span>' + esc(v.titulo) + '</button>').join('');
+      ordenados().map(v => '<button type="button" data-filtro="' + v.id + '" aria-pressed="' + (actual === v.id) + '">' +
+        '<span class="m-menu-n">' + nums.get(v.id) + '</span>' + esc(v.titulo) + '</button>').join('');
     menu.hidden = false;
     b.setAttribute('aria-expanded', 'true');
     const s = $('[aria-pressed="true"]', menu) || $('button', menu);
@@ -945,7 +977,7 @@
   function abrirCapas(b) {
     menuBoton = b;
     menu.innerHTML = '<p class="m-menu-t">Mapa base</p>' + mapa.bases().map(x =>
-      '<button type="button" data-base="' + x.k + '" aria-pressed="' + x.activa + '">' + ico('capas') + x.nombre + '</button>').join('');
+      '<button type="button" data-base="' + x.k + '" aria-pressed="' + x.activa + '"><span class="sw" data-b="' + x.k + '" aria-hidden="true"><i></i></span>' + x.nombre + '</button>').join('');
     menu.hidden = false;
     b.setAttribute('aria-expanded', 'true');
     $('[aria-pressed="true"]', menu).focus();
@@ -964,10 +996,8 @@
     const id = b.dataset.filtro;
     cerrarMenu();
     if (viajeActual) { ir(id ? '#v/' + id : HASH[tab]); return; }
-    if (!id) { seguir = false; mapaTodos(tab === 'fotos' ? visFotos() : datos, tocarViaje, soloFav || tab === 'favs'); return; }
+    if (!id) { seguir = false; mapaTodos(tab === 'fotos' ? visFotos() : datos, tocarViaje, soloFav); return; }
     if (tab !== 'viajes') { ir('#v/' + id); return; }
-    soloFav = false;
-    mapa.favorito(false);
     seguir = true;
     const t = $('#ficha-' + id);
     if (t) { irFicha(t); mapaViaje(porId(id), true); }
@@ -982,9 +1012,10 @@
     return '<nav class="tabs" aria-label="Ver">' +
       t('viajes', 'pin', datos.length, datos.length === 1 ? 'viaje' : 'viajes') +
       t('fotos', 'foto', nf, nf === 1 ? 'foto' : 'fotos') +
-      t('favs', 'corazon', nv, nv === 1 ? 'favorito' : 'favoritos') + '<i class="tab-barra" aria-hidden="true"></i></nav>';
+      '<button type="button" class="tab tab-fav cz" data-fav-modo aria-pressed="' + soloFav + '" aria-label="Modo corazón: ' + plural(nv, 'foto favorita', 'fotos favoritas') + '">' +
+      '<span class="ci">' + ico('corazon') + '</span><b>' + nv + '</b></button><i class="tab-barra" aria-hidden="true"></i></nav>';
   }
-  const BOLA = '<span class="cz-b" aria-hidden="true">' + ico('corazon') + '</span>';
+  const BOLA = '<span class="cz-b" aria-hidden="true">' + ico('corazon') + '</span>'; /* corazón pequeño de las fotos favoritas */
   let anioIni = 0;
   const corazon = (cls, attr, on, etiqueta) => '<button type="button" class="' + cls + ' cz" ' + attr + ' aria-pressed="' + !!on + '" aria-label="' + etiqueta + '">' + ico('corazon') + '</button>';
 
@@ -1020,22 +1051,23 @@
       '<div class="h-pie"><button type="button" class="pill peligro" data-f="borrar"><span>Quitar viaje</span></button>' +
       '<button type="button" class="pill" data-f="cancelar">Cancelar</button><button type="submit" class="pill pri">Guardar</button></div></form>';
   }
-  function ficha(v, i, total) {
+  function ficha(v, num, total) {
     const fs = conFoto(v), n = dias(v), a = aFecha(v.desde), b = aFecha(v.hasta) || a, abierta = fichaAbierta === v.id;
     const lug = lugaresDe(v), adj = adjuntosDe(v);
-    let h = '<article class="fi" id="ficha-' + v.id + '" data-id="' + v.id + '" role="group" aria-label="Viaje ' + (i + 1) + ' de ' + total + '">' +
-      '<div class="fi-cab"><span class="fi-n">' + (i + 1) + '</span><span class="fi-t">' + ico('reloj') + cuando(v) + '</span></div>' +
-      '<h3 class="fi-tit"><a href="#v/' + v.id + '">' + esc(v.titulo) + ico('der') + '</a></h3>' +
+    let h = '<article class="fi" id="ficha-' + v.id + '" data-id="' + v.id + '" role="group" aria-label="Viaje ' + num + ' de ' + total + '">' +
+      '<div class="fi-cab"><span class="num-v" aria-hidden="true"><small>Viaje</small><span class="fi-n">' + num + '</span></span><span class="fi-t">' + ico('reloj') + cuando(v) + '</span></div>' +
+      '<h3 class="fi-tit"><a href="#v/' + v.id + '">' + esc(v.titulo) + '</a></h3>' +
       '<div class="fi-fechas">' + ico('cal') + (a ? '<span class="fi-r"><small>Del</small><b>' + diaMes(a) + '</b><small>al</small><b>' + diaMes(b) + ' ' + b.getUTCFullYear() + '</b></span>' +
         '<span class="fi-d"><b>' + n + '</b><small>' + (n === 1 ? 'día' : 'días') + '</small></span>' : '<span class="fi-r"><small>Sin fechas todavía</small></span>') + '</div>' +
       ovalos(lug.length ? lug : (v.lugar ? [v.lugar] : [])) +
       (v.texto ? '<p class="fi-txt">' + esc(v.texto) + '</p>' : '') + '<hr class="fi-hr">';
     if (fs.length) {
+      const mini = soloFav ? fs.filter(p => p.fav).concat(fs.filter(p => !p.fav)) : fs; /* en modo corazón, las favoritas primero */
       h += '<a class="fi-fotos" href="#v/' + v.id + '" aria-label="Ver las ' + fs.length + ' fotos de ' + esc(v.titulo) + ' y su mapa">' +
-        fs.slice(0, 4).map(p => '<img src="' + src(p.f) + '" alt="" loading="lazy">').join('') +
-        '<span>' + ico('foto') + plural(fs.length, 'foto', 'fotos') + ' y mapa' + ico('der') + '</span></a>';
+        mini.slice(0, 4).map(p => '<span class="mini' + (p.fav ? ' fav' : '') + '"><img src="' + src(p.f) + '" alt="" loading="lazy">' + BOLA + '</span>').join('') +
+        '<span class="fi-fotos-t">' + ico('foto') + plural(fs.length, 'foto', 'fotos') + ' y mapa</span></a>';
     } else {
-      h += '<a class="fi-sin" href="#v/' + v.id + '">' + ico('foto') + 'Sin fotos todavía · abrir el viaje' + ico('der') + '</a>';
+      h += '<a class="fi-sin" href="#v/' + v.id + '">' + ico('foto') + 'Sin fotos todavía · abrir el viaje</a>';
     }
     h += '<hr class="fi-hr"><div class="fi-adj">' + (adj.length ? adj.map((x, j) => adjuntoFila(v, x, j)).join('') : '<p class="fi-nof">Sin archivos adjuntos todavía</p>') + '</div>';
     if (editando) {
@@ -1046,67 +1078,59 @@
     return h + '</article>';
   }
   function pintarFichas() {
-    const ord = ordenados();
+    const ord = ordenados(), nums = numeros();
     let h = '<div class="fi-top"><h2 class="ttl">Mis viajes</h2>' +
       '<button type="button" class="pill fi-add" data-nuevo-viaje><span class="vp" aria-hidden="true">' + ico('mas') + '</span>Añadir viaje</button></div>';
     h += '<div class="carr"><div class="pista" tabindex="0" role="region" aria-label="Mis viajes. Desliza para ver más">' +
-      ord.map((v, i) => ficha(v, i, ord.length)).join('') +
+      ord.map(v => ficha(v, nums.get(v.id), ord.length)).join('') +
       '<button type="button" class="fi fi-plus" data-nuevo-viaje><span class="pl" aria-hidden="true">' + ico('mas') + '</span><b>Añadir viaje</b><small>Destino, fechas y fotos</small></button>' +
-      '</div><div class="puntos-carr"><button type="button" class="pill fi-nav" data-paso="-1">' + ico('izq') + 'Anterior</button><span class="dots">' + ord.map((v, i) => '<button type="button" class="dot" data-ir="' + i + '" aria-label="Ir al viaje ' + (i + 1) + '"></button>').join('') +
+      '</div><div class="puntos-carr"><button type="button" class="pill fi-nav" data-paso="-1">' + ico('izq') + 'Anterior</button><span class="dots">' + ord.map((v, i) => '<button type="button" class="dot" data-ir="' + i + '" aria-label="Ir al viaje ' + nums.get(v.id) + '"></button>').join('') +
       '<button type="button" class="dot dot-mas" data-ir="' + ord.length + '" aria-label="Ir a añadir viaje"></button></span><button type="button" class="pill fi-nav" data-paso="1">Siguiente' + ico('der') + '</button></div></div>';
     if (!ord.length) h += '<p class="nota centro">' + (modo === 'mios' ? 'Aún no tienes viajes. Pulsa «Añadir viaje» para crear el primero.' : '') + '</p>';
     return h;
   }
-  function filaViaje(v) {
+  function filaViaje(v, num) {
     const p = portada(v), n = conFoto(v).length;
-    return '<li><a class="viaje" href="#v/' + v.id + '" data-id="' + v.id + '">' +
+    return '<li><a class="viaje" href="#v/' + v.id + '" data-id="' + v.id + '" aria-label="Viaje ' + num + ': ' + esc(v.titulo) + '">' +
+      '<span class="num-v" aria-hidden="true"><small>Viaje</small><span class="fi-n fi-n-s">' + num + '</span></span>' +
       (p ? '<img src="' + src(p) + '" alt="" loading="lazy">' : '<span class="ph">' + ico('pin') + '</span>') +
       '<span class="vi"><b>' + esc(v.titulo) + '</b>' + ovalos(v.lugar ? [v.lugar] : [], 'mini') +
-      '<small>' + [rango(v), n ? plural(n, 'foto', 'fotos') : 'sin fotos'].filter(Boolean).join(' · ') + '</small></span>' +
-      ico('der') + '</a></li>';
+      '<small>' + [rango(v), n ? plural(n, 'foto', 'fotos') : 'sin fotos'].filter(Boolean).join(' · ') + '</small></span></a></li>';
   }
   function pintarFotos() {
     const lista = ordenados();
     const anios = [...new Set(lista.map(anio).filter(Boolean))];
-    if (filtro && filtro !== 'fav' && anios.indexOf(filtro) < 0) filtro = '';
+    if (filtro && anios.indexOf(filtro) < 0) filtro = '';
     const vis = visFotos();
     let h = '<h2 class="ttl">Nuestras fotos</h2>';
     if (!lista.length) return h + '<div class="vacio">' + ico('foto') + '<p>Aún no hay fotos.</p></div>';
-    const nA = innerWidth < 360 ? 1 : 2, k = anios.indexOf(filtro);
+    const nA = Math.min(panel.clientWidth || innerWidth, innerWidth) < 370 ? 1 : 2, k = anios.indexOf(filtro);
     if (k >= 0 && k < anioIni) anioIni = k; else if (k >= anioIni + nA) anioIni = k - nA + 1;
     anioIni = Math.max(0, Math.min(anioIni, anios.length - nA));
-    const flecha = (d, i, off, et) => anios.length > nA ? '<button type="button" class="ib ib-s" data-anios="' + d + '"' + (off ? ' disabled' : '') + ' aria-label="' + et + '">' + ico(i) + '</button>' : '';
-    h += '<div class="pills anios" role="group" aria-label="Filtrar">' +
-      '<button type="button" class="pill suave" data-anio="" aria-pressed="' + !filtro + '">Todos</button>' +
-      corazon('pill', 'data-anio="fav"', filtro === 'fav', 'Solo viajes con fotos favoritas') +
-      flecha(-1, 'izq', anioIni === 0, 'Años más recientes') +
+    /* Las flechas seleccionan el año de al lado, de uno en uno: Todos › 2025 › 2024 › … */
+    const flecha = (d, i, off, et) => '<button type="button" class="ib ib-s" data-anios="' + d + '"' + (off ? ' disabled' : '') + ' aria-label="' + et + '">' + ico(i) + '</button>';
+    h += '<div class="anios" role="group" aria-label="Filtrar las fotos">' +
+      '<div class="anios-f"><button type="button" class="pill suave" data-anio="" aria-pressed="' + !filtro + '">Todos</button>' +
+      corazon('pill', 'data-fav-modo', soloFav, 'Modo corazón: solo viajes con fotos favoritas') + '</div>' +
+      '<div class="anios-a" aria-label="Años. Desliza o usa las flechas">' + flecha(-1, 'izq', !filtro, k > 0 ? 'Año ' + anios[k - 1] : 'Todos los años') +
       anios.slice(anioIni, anioIni + nA).map(a => '<button type="button" class="pill" data-anio="' + a + '" aria-pressed="' + (filtro === a) + '">' + a + '</button>').join('') +
-      flecha(1, 'der', anioIni + nA >= anios.length, 'Años anteriores') + '</div>';
-    if (!vis.length) return h + '<div class="vacio">' + ico('corazon') + '<p>Aún no hay fotos favoritas.</p></div>';
+      flecha(1, 'der', k >= anios.length - 1, k + 1 < anios.length ? 'Año ' + anios[k + 1] : 'No hay años anteriores') + '</div></div>';
+    if (!vis.length) return h + '<div class="vacio">' + ico('corazon') + '<p>' + (soloFav ? 'No hay fotos favoritas en este año.' : 'No hay viajes en este año.') + '</p></div>';
+    const num = numeros();
     let ultimo = null;
     h += '<ul class="lista">';
     vis.forEach(v => {
       const a = anio(v) || 'Sin fecha';
-      if (a !== ultimo && (!filtro || filtro === 'fav')) { h += '<li class="anio" aria-hidden="true">' + a + '</li>'; ultimo = a; }
-      h += filaViaje(v);
+      if (a !== ultimo && !filtro) { h += '<li class="anio" aria-hidden="true">' + a + '</li>'; ultimo = a; }
+      h += filaViaje(v, num.get(v.id));
     });
     return h + '</ul>';
-  }
-  function pintarFavs() {
-    const fs = [];
-    ordenados().forEach(v => conFoto(v).forEach(p => { if (p.fav) fs.push({ v, p }); }));
-    const h = '<h2 class="ttl">Fotos favoritas<small>' + fs.length + '</small></h2>';
-    if (!fs.length) return h + '<div class="vacio">' + ico('corazon') + '<p><b>Aún no hay favoritas.</b><br>Abre una foto y toca el corazón.</p></div>';
-    return h + '<div class="galeria">' + fs.map(o =>
-      '<button type="button" class="ft fav" data-v="' + o.v.id + '" data-p="' + o.p.id + '"><img src="' + src(o.p.f) + '" alt="' +
-      esc(nombrePunto(o.p) + ' · ' + o.v.titulo) + '" loading="lazy" decoding="async">' + BOLA + '</button>').join('') + '</div>';
   }
   function pintarInicio() {
     viajeActual = null;
     panel.innerHTML = pestanas() + '<div class="pager">' +
       '<section class="pag" data-pag="viajes" aria-label="Viajes">' + pintarFichas() + '</section>' +
-      '<section class="pag" data-pag="fotos" aria-label="Fotos">' + pintarFotos() + '</section>' +
-      '<section class="pag" data-pag="favs" aria-label="Favoritos">' + pintarFavs() + '</section></div>';
+      '<section class="pag" data-pag="fotos" aria-label="Fotos">' + pintarFotos() + '</section></div>';
     altoMapa();
     prepararPager();
     prepararCarrusel();
@@ -1127,7 +1151,7 @@
   }
   function moverBarra(r) {
     const b = $('.tab-barra', panel);
-    if (b) b.style.transform = 'translateX(calc(' + Math.min(2, Math.max(0, r)).toFixed(3) + ' * (100% + .5rem)))';
+    if (b) b.style.transform = 'translateX(calc(' + Math.min(TABS.length - 1, Math.max(0, r)).toFixed(3) + ' * (100% + .5rem)))';
   }
   function verTab(t, animar) {
     const pg = pager();
@@ -1145,8 +1169,13 @@
     pg.scrollLeft = TABS.indexOf(tab) * pg.clientWidth;
     altoPager();
     moverBarra(TABS.indexOf(tab));
-    let t0 = 0, gesto = false; /* solo un gesto de la persona cambia de pestaña al deslizar */
-    ['pointerdown', 'touchstart', 'wheel'].forEach(ev => pg.addEventListener(ev, () => { gesto = true; }, { passive: true }));
+    /* Solo un gesto reciente de la persona puede cambiar de pestaña al deslizar; no los reajustes de la página */
+    let t0 = 0, gesto = false, tGesto = 0;
+    const conGesto = () => { gesto = true; clearTimeout(tGesto); };
+    const finGesto = () => { clearTimeout(tGesto); tGesto = setTimeout(() => { gesto = false; }, 900); };
+    ['pointerdown', 'touchstart'].forEach(ev => pg.addEventListener(ev, conGesto, { passive: true }));
+    ['pointerup', 'pointercancel', 'touchend', 'touchcancel'].forEach(ev => pg.addEventListener(ev, finGesto, { passive: true }));
+    pg.addEventListener('wheel', () => { conGesto(); finGesto(); }, { passive: true });
     pg.addEventListener('scroll', () => {
       moverBarra(pg.scrollLeft / Math.max(1, pg.clientWidth));
       clearTimeout(t0);
@@ -1192,6 +1221,13 @@
     [...pista.children].forEach(f => { const d = Math.abs(f.offsetLeft + f.offsetWidth / 2 - c); if (d < mejor) { mejor = d; k = f; } });
     return k;
   }
+  /* Ir a una ficha y enseñar su viaje en el mapa, aunque ya fuera la de delante */
+  function enfocarFicha(el) {
+    seguir = true;
+    if (el === fichaActual()) {
+      if (el.dataset.id) mapaViaje(porId(el.dataset.id), true); else mapaTodos(datos, tocarViaje, soloFav);
+    } else irFicha(el);
+  }
   function irFicha(el, sinAnimar) {
     const pista = el.parentElement;
     pista.scrollTo({ left: el.offsetLeft - (pista.clientWidth - el.offsetWidth) / 2, behavior: sinAnimar || menosMov.matches ? 'auto' : 'smooth' });
@@ -1213,7 +1249,7 @@
       if (f === actual) return;
       actual = f;
       clearTimeout(tMapa);
-      if (tab === 'viajes' && seguir && !soloFav) tMapa = setTimeout(() => { if (f.dataset.id) mapaViaje(porId(f.dataset.id), true); else mapaTodos(datos, tocarViaje); }, 160);
+      if (tab === 'viajes' && seguir) tMapa = setTimeout(() => { if (f.dataset.id) mapaViaje(porId(f.dataset.id), true); else mapaTodos(datos, tocarViaje, soloFav); }, 160);
     };
     pista.addEventListener('scroll', () => { if (!cola) cola = requestAnimationFrame(marcar); }, { passive: true });
     ['pointerdown', 'wheel', 'keydown'].forEach(ev => pista.addEventListener(ev, () => { seguir = true; }, { passive: true }));
@@ -1232,7 +1268,7 @@
     const fs = conFoto(v), lugares = puntosDe(v).filter(p => !p.f), n = dias(v), ord = ordenados(), k = ord.indexOf(v);
     const sinUbic = fs.filter(p => p.lat == null).length;
     const enl = (v.enlaces || []).filter(e => e && e.u);
-    let h = '<a class="pill volver" href="' + HASH[tab] + '">' + ico('izq') + { viajes: 'Volver a mis viajes', fotos: 'Volver a todas las fotos', favs: 'Volver a favoritas' }[tab] + '</a>';
+    let h = '<a class="pill volver" href="' + HASH[tab] + '">' + ico('izq') + { viajes: 'Volver a mis viajes', fotos: 'Volver a todas las fotos' }[tab] + '</a>';
     h += '<h2 class="ttl">' + esc(v.titulo) + '</h2><div class="meta">' +
       (v.desde ? '<span>' + ico('cal') + rango(v) + (n > 1 ? ' · ' + n + ' días' : '') + '</span>' : '') + '</div>' +
       ovalos(lugaresDe(v).length ? lugaresDe(v) : (v.lugar ? [v.lugar] : []));
@@ -1270,8 +1306,8 @@
     const ant = ord[k + 1], sig = ord[k - 1];
     if (ant || sig) {
       h += '<nav class="paso" aria-label="Otros viajes">' +
-        (ant ? '<a class="pill" href="#v/' + ant.id + '">' + ico('izq') + esc(ant.titulo) + '</a>' : '<span></span>') +
-        (sig ? '<a class="pill" href="#v/' + sig.id + '">' + esc(sig.titulo) + ico('der') + '</a>' : '') + '</nav>';
+        (ant ? '<a class="pill" href="#v/' + ant.id + '" data-desliza="i">' + ico('izq') + esc(ant.titulo) + '</a>' : '<span></span>') +
+        (sig ? '<a class="pill" href="#v/' + sig.id + '" data-desliza="d">' + esc(sig.titulo) + ico('der') + '</a>' : '') + '</nav>';
     }
     panel.innerHTML = h;
     altoMapa();
@@ -1320,8 +1356,14 @@
       tab = 'viajes';
       seguir = true;
       pintarPanel('inicio', null, true);
-    } else if (r.tipo === 'inicio' || r.tipo === 'fotos' || r.tipo === 'favoritos') {
-      const t = { inicio: 'viajes', fotos: 'fotos', favoritos: 'favs' }[r.tipo];
+    } else if (r.tipo === 'favoritos') {
+      history.replaceState(history.state, '', location.pathname + location.search);
+      aplicado = location.hash;
+      tab = 'viajes';
+      pintarPanel('inicio', null);
+      if (!soloFav) ponerFav(true);
+    } else if (r.tipo === 'inicio' || r.tipo === 'fotos') {
+      const t = r.tipo === 'fotos' ? 'fotos' : 'viajes';
       if (vistaKey.indexOf('inicio:') === 0 && pager()) verTab(t, true);
       else { if (viajeActual) fichaVer = viajeActual.id; tab = t; pintarPanel('inicio', null); }
     } else if (v) pintarPanel('viaje', v);
@@ -1436,9 +1478,8 @@
       if (p.fav) delete p.fav; else p.fav = true;
       guardarFav();
       b.setAttribute('aria-pressed', !!p.fav);
-      const ft = $('.ft[data-p="' + p.id + '"]', panel);
-      if (ft) ft.classList.toggle('fav', !!p.fav);
-      toast(p.fav ? 'Añadida a favoritos' : 'Quitada de favoritos');
+      refrescarFav(p);
+      toast(p.fav ? 'Añadida a favoritas' : 'Quitada de favoritas');
     }
     else if (a === 'ant') cambiarFoto(-1);
     else if (a === 'sig') cambiarFoto(1);
@@ -1795,18 +1836,15 @@
   }
   panel.addEventListener('click', e => {
     const t = e.target;
+    if (t.closest('[data-fav-modo]')) { ponerFav(!soloFav); return; }
     if (t.closest('.tab')) {
       if (innerWidth < 900) window.scrollTo({ top: panel.getBoundingClientRect().top + scrollY, behavior: menosMov.matches ? 'auto' : 'smooth' });
       return;
     }
+    const dz = t.closest('[data-desliza]');
+    if (dz) { e.preventDefault(); e.stopPropagation(); irDeslizando(dz.getAttribute('href'), dz.dataset.desliza); return; }
     const fl = t.closest('[data-anios]');
-    if (fl) {
-      anioIni += +fl.dataset.anios;
-      $('[data-pag="fotos"]', panel).innerHTML = pintarFotos();
-      const otra = $('[data-anios="' + fl.dataset.anios + '"]:not([disabled])', panel) || $('[data-anios]:not([disabled])', panel);
-      if (otra) otra.focus();
-      return;
-    }
+    if (fl) { moverAnios(+fl.dataset.anios, true); return; }
     const p = t.closest('[data-anio]');
     if (p) { filtro = p.dataset.anio; pintarPanel('inicio', null); return; }
     const ft = t.closest('.ft');
@@ -1814,12 +1852,11 @@
     const paso = t.closest('[data-paso]');
     if (paso) {
       const fs = [...$('.pista', panel).children], k = fs.indexOf(fichaActual()) + (+paso.dataset.paso);
-      seguir = true;
-      if (fs[k]) irFicha(fs[k]);
+      if (fs[k]) enfocarFicha(fs[k]);
       return;
     }
     const dot = t.closest('[data-ir]');
-    if (dot) { seguir = true; const f = $('.pista', panel).children[+dot.dataset.ir]; if (f) irFicha(f); return; }
+    if (dot) { const f = $('.pista', panel).children[+dot.dataset.ir]; if (f) enfocarFicha(f); return; }
     const mod = t.closest('[data-modificar]');
     if (mod) {
       const id = mod.dataset.modificar;
@@ -1901,6 +1938,60 @@
       });
     }
   });
+  /* Años de Fotos: flechas o deslizar el dedo sobre ellos */
+  function moverAnios(d, foco) {
+    const anios = [...new Set(ordenados().map(anio).filter(Boolean))];
+    const n = (filtro ? anios.indexOf(filtro) : -1) + d;
+    if (n < -1 || n >= anios.length) return;
+    filtro = n < 0 ? '' : anios[n];
+    pintarPanel('inicio', null);
+    const fila = $('.anios-a', panel);
+    if (fila && !menosMov.matches) fila.classList.add(d > 0 ? 'entra-d' : 'entra-i');
+    if (foco) {
+      const otra = $('[data-anios="' + d + '"]:not([disabled])', panel) || $('[data-anios]:not([disabled])', panel);
+      if (otra) otra.focus();
+    }
+  }
+  let swA = null, sinClic = 0;
+  document.addEventListener('pointerdown', e => {
+    swA = e.isPrimary && panel.contains(e.target) && e.target.closest('.anios-a') ? { id: e.pointerId, x: e.clientX, y: e.clientY } : null;
+  });
+  document.addEventListener('pointerup', e => {
+    if (!swA || e.pointerId !== swA.id) return;
+    const dx = e.clientX - swA.x, dy = e.clientY - swA.y;
+    swA = null;
+    if (Math.abs(dx) < 35 || Math.abs(dx) < Math.abs(dy) * 1.2) return;
+    sinClic = Date.now() + 250; /* que el clic que sigue al barrido no seleccione un año */
+    moverAnios(dx < 0 ? 1 : -1);
+  });
+  document.addEventListener('pointercancel', () => { swA = null; });
+  panel.addEventListener('click', e => {
+    if (Date.now() < sinClic && e.target.closest('.anios-a')) { sinClic = 0; e.preventDefault(); e.stopPropagation(); }
+  }, true);
+
+  /* En un viaje: deslizar a los lados para pasar al viaje anterior o al siguiente */
+  let swV = null;
+  panel.addEventListener('touchstart', e => {
+    swV = viajeActual && e.touches.length === 1 && !e.target.closest('input, textarea, select, .fi-form, .enlaces')
+      ? { x: e.touches[0].clientX, y: e.touches[0].clientY, t: Date.now() } : null;
+  }, { passive: true });
+  panel.addEventListener('touchend', e => {
+    if (!swV || !viajeActual) return;
+    const c = e.changedTouches[0], dx = c.clientX - swV.x, dy = c.clientY - swV.y, rapido = Date.now() - swV.t < 700;
+    swV = null;
+    if (!rapido || Math.abs(dx) < 70 || Math.abs(dx) < Math.abs(dy) * 1.6) return;
+    const a = $('.paso [data-desliza="' + (dx < 0 ? 'd' : 'i') + '"]', panel);
+    if (a) irDeslizando(a.getAttribute('href'), dx < 0 ? 'd' : 'i');
+  }, { passive: true });
+  function irDeslizando(h, lado) {
+    ir(h);
+    if (menosMov.matches) return;
+    panel.classList.remove('entra-d', 'entra-i');
+    void panel.offsetWidth;
+    panel.classList.add(lado === 'd' ? 'entra-d' : 'entra-i');
+  }
+  panel.addEventListener('animationend', e => { e.target.classList.remove('entra-d', 'entra-i'); });
+
   panel.addEventListener('pointerover', e => {
     if (e.pointerType !== 'mouse') return;
     const a = e.target.closest('.viaje, .ft, [data-lugar]');
@@ -2017,6 +2108,11 @@
     } else if (!visor.hidden && hoja.hidden) {
       if (e.key === 'ArrowLeft') cambiarFoto(-1);
       else if (e.key === 'ArrowRight') cambiarFoto(1);
+    } else if (viajeActual && hoja.hidden && !eligiendo && (e.key === 'ArrowLeft' || e.key === 'ArrowRight') &&
+      !e.target.closest('input, textarea, select, .leaflet-container, .mapa')) {
+      /* En un viaje, las flechas del teclado pasan al viaje de al lado */
+      const a = $('.paso [data-desliza="' + (e.key === 'ArrowRight' ? 'd' : 'i') + '"]', panel);
+      if (a) { e.preventDefault(); irDeslizando(a.getAttribute('href'), a.dataset.desliza); }
     }
   });
 

@@ -149,12 +149,46 @@
     LS.poner('x-copia', null);
     pintarAviso();
   }
+  /* ---------- Archivos propios en memoria, con miniatura para mapa, fichas y cuadros ---------- */
+  function ponerArch(nombre, blob) {
+    arch.set(nombre, { blob, url: URL.createObjectURL(blob) });
+    if (/^image\//.test(blob.type || '') || /\.jpe?g$/i.test(nombre)) pedirMinis();
+  }
+  function quitarArch(x) {
+    URL.revokeObjectURL(x.url);
+    if (x.mini) URL.revokeObjectURL(x.mini);
+  }
   function soltar(f) {
-    if (f && arch.has(f)) { URL.revokeObjectURL(arch.get(f).url); arch.delete(f); IDB.quitar(f); }
+    if (f && arch.has(f)) { quitarArch(arch.get(f)); arch.delete(f); IDB.quitar(f); }
   }
   async function guardarArchivo(nombre, blob) {
     await IDB.poner(nombre, blob);
-    arch.set(nombre, { blob, url: URL.createObjectURL(blob) });
+    ponerArch(nombre, blob);
+  }
+  /* Las fotos propias pesan mucho (hasta 2560 px): se hace una copia pequeña en segundo plano
+     y se cambia en lo que ya está a la vista. Solo vive en memoria; la copia de seguridad no cambia. */
+  const LADO_MINI = 400;
+  let tMinis = 0, haciendoMinis = false;
+  function pedirMinis() { clearTimeout(tMinis); tMinis = setTimeout(hacerMinis, 300); }
+  async function hacerMinis() {
+    if (haciendoMinis || typeof createImageBitmap !== 'function') return;
+    haciendoMinis = true;
+    for (const [f, x] of arch) {
+      if (x.mini || x.sinMini || !/\.jpe?g$/i.test(f)) continue;
+      try {
+        const bm = await createImageBitmap(x.blob), k = Math.min(1, LADO_MINI / Math.max(bm.width, bm.height));
+        const c = document.createElement('canvas');
+        c.width = Math.round(bm.width * k);
+        c.height = Math.round(bm.height * k);
+        c.getContext('2d').drawImage(bm, 0, 0, c.width, c.height);
+        bm.close();
+        const b = await new Promise(ok => c.toBlob(ok, 'image/jpeg', 0.8));
+        if (!b || arch.get(f) !== x) continue;
+        x.mini = URL.createObjectURL(b);
+        document.querySelectorAll('img[src="' + x.url + '"]').forEach(im => { if (!im.closest('#visor, #hoja')) im.src = x.mini; });
+      } catch (e) { x.sinMini = true; /* se queda la foto grande */ }
+    }
+    haciendoMinis = false;
   }
 
   const porId = id => id === rec.id ? rec : datos.find(v => v.id === id);
@@ -171,6 +205,10 @@
   const ubicados = v => puntosDe(v).filter(p => p.lat != null);
   const puntoDe = (v, id) => puntosDe(v).find(p => p.id === id);
   const src = f => arch.has(f) ? arch.get(f).url : encodeURI(f);
+  /* Foto pequeña para mapa, fichas y cuadros: la miniatura propia, o la «-m.jpg» de los ejemplos */
+  const EJ_FOTOS = new Set();
+  (window.VIAJES || []).forEach(v => (v.puntos || []).forEach(p => { if (p.f) EJ_FOTOS.add(p.f); }));
+  const peq = f => arch.has(f) ? (arch.get(f).mini || arch.get(f).url) : EJ_FOTOS.has(f) ? encodeURI(f.replace(/\.jpg$/i, '-m.jpg')) : encodeURI(f);
   const nombrePunto = p => p.nombre || p.txt || (p.f ? 'Foto' : 'Punto');
   function portada(v) {
     const fs = conFoto(v);
@@ -679,7 +717,7 @@
     } catch (e) { lista = null; }
     if (!Array.isArray(lista)) { toast('Ese archivo no es una copia de Mis viajes'); return; }
     await IDB.vaciar();
-    arch.forEach(x => URL.revokeObjectURL(x.url));
+    arch.forEach(quitarArch);
     arch.clear();
     let n = 0;
     for (const nombre of Object.keys(partes)) {
@@ -707,7 +745,7 @@
       const d = (lista || []).find(x => x[0] === CLAVE_DATOS);
       if (d) {
         datos = separar(JSON.parse(d[1]));
-        (lista || []).forEach(([k, b]) => { if (k !== CLAVE_DATOS && !arch.has(k)) arch.set(k, { blob: b, url: URL.createObjectURL(b) }); });
+        (lista || []).forEach(([k, b]) => { if (k !== CLAVE_DATOS && !arch.has(k)) ponerArch(k, b); });
         hayMios = true;
       } else { datos = separar([]); hayMios = true; IDB.poner(CLAVE_DATOS, '[]'); }
       persistir();
@@ -782,7 +820,7 @@
     return {
       clase: 'm-v', tam: 44,
       titulo: items.length > 1 ? items.length + ' viajes: ' + items.map(i => i.v.titulo).join(', ') : v.titulo,
-      html: (p ? '<img src="' + src(p) + '" alt="">' : ico('pin')) + (items.length > 1 ? '<span class="m-n">' + items.length + '</span>' : '')
+      html: (p ? '<img src="' + peq(p) + '" alt="">' : ico('pin')) + (items.length > 1 ? '<span class="m-n">' + items.length + '</span>' : '')
     };
   }
   function marcaPunto(items) {
@@ -790,7 +828,7 @@
     return {
       clase: p.f ? 'm-f' : 'm-l', tam: p.f ? 38 : 32,
       titulo: n > 1 ? n + ' puntos aquí' : nombrePunto(p),
-      html: (p.f ? '<img src="' + src(p.f) + '" alt="">' : ico('pin')) + (n > 1 ? '<span class="m-n">' + n + '</span>' : '')
+      html: (p.f ? '<img src="' + peq(p.f) + '" alt="">' : ico('pin')) + (n > 1 ? '<span class="m-n">' + n + '</span>' : '')
     };
   }
 
@@ -799,7 +837,7 @@
     return {
       clase: 'm-r', tam: p.f ? 38 : 32,
       titulo: n > 1 ? n + ' recuerdos aquí' : 'Recuerdo: ' + nombrePunto(p),
-      html: (p.f ? '<img src="' + src(p.f) + '" alt="">' : ico('recuerdo')) + (n > 1 ? '<span class="m-n">' + n + '</span>' : '')
+      html: (p.f ? '<img src="' + peq(p.f) + '" alt="">' : ico('recuerdo')) + (n > 1 ? '<span class="m-n">' + n + '</span>' : '')
     };
   }
   const puntosRec = () => ubicados(rec).filter(o => (!soloFav || o.fav) && (tab !== 'rec' || !filtroRec || anioP(o) === filtroRec)).map(o => ({ id: 'recuerdos/' + o.id, lat: o.lat, lng: o.lng, v: rec, p: o }));
@@ -890,7 +928,7 @@
   $('#m-logo').addEventListener('click', verTodosViajes); /* como el botón del planeta */
   function ventanaViaje(v) {
     const p = posicion(v), f = portada(v), n = conFoto(v).length;
-    mapa.ventana(p.lat, p.lng, (f ? '<img class="pop-img" src="' + src(f) + '" alt="">' : '') + '<b>' + esc(v.titulo) + '</b>' +
+    mapa.ventana(p.lat, p.lng, (f ? '<img class="pop-img" src="' + peq(f) + '" alt="">' : '') + '<b>' + esc(v.titulo) + '</b>' +
       (v.desde ? '<br><small>' + rango(v) + '</small>' : '') +
       '<br><a class="pill pri" href="#v/' + v.id + '">' + ico('foto') + (n ? plural(n, 'foto', 'fotos') + ' en el mapa' : 'Abrir el viaje') + '</a>');
   }
@@ -1232,7 +1270,7 @@
 
   function adjuntoFila(v, a, j) {
     const img = a.tipo === 'img', ext = (a.f.split('.').pop() || '').toUpperCase();
-    return '<div class="adj"><span class="adj-th">' + (img ? '<img src="' + src(a.f) + '" alt="" loading="lazy">' : ico('doc') + '<i>' + esc(ext) + '</i>') + '</span>' +
+    return '<div class="adj"><span class="adj-th">' + (img ? '<img src="' + peq(a.f) + '" alt="" loading="lazy">' : ico('doc') + '<i>' + esc(ext) + '</i>') + '</span>' +
       '<span class="adj-n">' + esc(a.n || a.f) + '</span>' +
       '<a class="pill" href="' + src(a.f) + '" target="_blank" rel="noopener">Ver</a>' +
       (editando ? '<button type="button" class="ib" data-adj-quitar="' + v.id + '/' + j + '" aria-label="Quitar ' + esc(a.n || a.f) + '">' + ico('x') + '</button>' : '') + '</div>';
@@ -1279,7 +1317,7 @@
     if (fs.length) {
       const mini = soloFav ? fs.filter(p => p.fav).concat(fs.filter(p => !p.fav)) : fs; /* en modo corazón, las favoritas primero */
       h += '<a class="fi-fotos" href="#v/' + v.id + '" aria-label="Ver las ' + fs.length + ' fotos de ' + esc(v.titulo) + ' y su mapa">' +
-        mini.slice(0, 4).map(p => '<span class="mini' + (p.fav ? ' fav' : '') + '"><img src="' + src(p.f) + '" alt="" loading="lazy">' + BOLA + '</span>').join('') +
+        mini.slice(0, 4).map(p => '<span class="mini' + (p.fav ? ' fav' : '') + '"><img src="' + peq(p.f) + '" alt="" loading="lazy">' + BOLA + '</span>').join('') +
         '<span class="fi-fotos-t">' + ico('foto') + plural(fs.length, 'foto', 'fotos') + ' y mapa</span></a>';
     } else {
       h += '<a class="fi-sin" href="#v/' + v.id + '">' + ico('foto') + 'Sin fotos todavía · abrir el viaje</a>';
@@ -1307,7 +1345,7 @@
     const p = portada(v), n = conFoto(v).length;
     return '<li><a class="viaje" href="#v/' + v.id + '" data-id="' + v.id + '" aria-label="Viaje ' + num + ': ' + esc(v.titulo) + '">' +
       '<span class="num-v" aria-hidden="true"><small>Viaje</small><span class="fi-n fi-n-s">' + num + '</span></span>' +
-      (p ? '<img src="' + src(p) + '" alt="" loading="lazy">' : '<span class="ph">' + ico('pin') + '</span>') +
+      (p ? '<img src="' + peq(p) + '" alt="" loading="lazy">' : '<span class="ph">' + ico('pin') + '</span>') +
       '<span class="vi"><b>' + esc(v.titulo) + '</b>' + ovalos(v.lugar ? [v.lugar] : [], 'mini') +
       '<small>' + [rango(v), n ? plural(n, 'foto', 'fotos') : 'sin fotos'].filter(Boolean).join(' · ') + '</small></span></a></li>';
   }
@@ -1356,7 +1394,7 @@
     return fs;
   };
   const cuadro = (o, sec) => '<button type="button" class="ft' + (o.p.fav ? ' fav' : '') + '" data-v="' + o.v.id + '" data-p="' + o.p.id + '" data-sec="' + sec + '">' +
-    (o.p.f ? '<img src="' + src(o.p.f) + '" alt="' + esc(nombrePunto(o.p) + (o.v.recuerdos ? '' : ' · ' + o.v.titulo)) + '" loading="lazy" decoding="async">' + BOLA
+    (o.p.f ? '<img src="' + peq(o.p.f) + '" alt="' + esc(nombrePunto(o.p) + (o.v.recuerdos ? '' : ' · ' + o.v.titulo)) + '" loading="lazy" decoding="async">' + BOLA
       : '<span class="ft-ph">' + ico('recuerdo') + '<small>' + esc(nombrePunto(o.p)) + '</small></span>') + '</button>';
   function mosaicoFotos() {
     const fs = listaMosaico();
@@ -1396,7 +1434,7 @@
     }
     return h + '<ul class="lista">' + rs.map(({ p }) => { const a = cab(p); return (a ? '<li class="anio" aria-hidden="true">' + a + '</li>' : '') +
       '<li><button type="button" class="viaje viaje-r' + (p.fav ? ' fav' : '') + '" data-rec="' + p.id + '">' +
-      (p.f ? '<img src="' + src(p.f) + '" alt="" loading="lazy">' : '<span class="ph">' + ico('recuerdo') + '</span>') +
+      (p.f ? '<img src="' + peq(p.f) + '" alt="" loading="lazy">' : '<span class="ph">' + ico('recuerdo') + '</span>') +
       '<span class="vi"><b>' + esc(nombrePunto(p)) + '</b><small>' + [fechaTxt(p.fecha), p.nombre && p.txt ? p.txt : '', p.lat == null ? 'Sin ubicación' : ''].filter(Boolean).map(esc).join(' · ') + '</small></span>' +
       (p.fav ? BOLA : '') + '</button></li>'; }).join('') + '</ul>';
   }
@@ -1572,7 +1610,7 @@
       h += '<div class="galeria">' + fs.map((p, i) => {
         const marca = editando && p.lat == null ? 'Sin ubicación' : '';
         return '<button type="button" class="ft' + (p.fav ? ' fav' : '') + '" data-p="' + p.id + '"' + (marca ? ' data-marca="' + marca + '"' : '') + '>' +
-          '<img src="' + src(p.f) + '" alt="' + esc(p.nombre || p.txt || 'Foto ' + (i + 1) + ' de ' + v.titulo) + '" loading="lazy" decoding="async">' + BOLA + '</button>';
+          '<img src="' + peq(p.f) + '" alt="' + esc(p.nombre || p.txt || 'Foto ' + (i + 1) + ' de ' + v.titulo) + '" loading="lazy" decoding="async">' + BOLA + '</button>';
       }).join('') + '</div>';
     } else {
       h += '<div class="vacio">' + ico('foto') + '<p>' + (editando ? 'Pulsa «Añadir fotos» y elige las de este viaje.' : 'Este viaje aún no tiene fotos.') + '</p></div>';
@@ -2456,7 +2494,7 @@
     hayMios = lista.some(x => x[0] === CLAVE_DATOS);
     if (hayMios && LS.leer('modo') !== 'ejemplos') {
       try { datos = separar(JSON.parse(lista.find(x => x[0] === CLAVE_DATOS)[1])); } catch (e) { datos = separar([]); }
-      lista.forEach(([k, b]) => { if (k !== CLAVE_DATOS) arch.set(k, { blob: b, url: URL.createObjectURL(b) }); });
+      lista.forEach(([k, b]) => { if (k !== CLAVE_DATOS) ponerArch(k, b); });
       modo = 'mios';
       persistir();
       try { ponerEdicion(sessionStorage.getItem('mis-viajes.editar') === '1'); } catch (e) { ponerEdicion(false); }

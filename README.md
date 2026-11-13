@@ -24,6 +24,7 @@ Si se borra la app o los datos del navegador, lo guardado se pierde: la copia es
 | `leaflet.js`, `leaflet.css`, `LICENSE-leaflet.txt` | Leaflet 1.9.4 (librería del mapa), guardada en el repositorio. |
 | `viajes.js` | Los **viajes de ejemplo** de la cara pública. |
 | `miami-*.jpg`, `ocean-cay-*.jpg`, `manizales-*.jpg`, `disney-*.jpg`, `mogan-*.jpg`, `burdeos-*.jpg` | Fotos de los ejemplos (burdeos, del recuerdo de ejemplo). |
+| `*-m.jpg` | Miniaturas de las fotos de ejemplo (400 px) para el mapa, las fichas y los cuadros; la foto grande solo se carga al abrirla. Al cambiar una foto de ejemplo, rehaz su miniatura. |
 | `logo.png`, `icon-192.png`, `icon-512.png`, `icon-maskable.png`, `apple-touch-icon.png`, `manifest.webmanifest` | Logo e iconos para instalarla como app. |
 | `robots.txt` | Pide a los buscadores que no la indexen. |
 
@@ -51,6 +52,11 @@ Si se borra la app o los datos del navegador, lo guardado se pierde: la copia es
 - **Buscar** (lupa): escribe una dirección o un lugar y pulsa Buscar. Al elegir un resultado aparece un marcador con las mismas opciones que al marcar un sitio. Necesita conexión.
 - **Pasar un punto a otro viaje:** Editar punto › campo «Dónde se guarda» (otro viaje, Recuerdos o un viaje nuevo).
 
+## Rendimiento
+
+- Las fotos de ejemplo se ven en miniatura (`-m.jpg`) y la grande solo se descarga al abrirla en el visor: la primera carga pasa de unos 3,8 MB a unos 0,7 MB.
+- Las fotos propias tienen una miniatura en memoria, hecha en segundo plano; la copia de seguridad no cambia.
+
 ## Privacidad
 
 - Los viajes, fotos y recuerdos propios se guardan en el navegador del dispositivo (IndexedDB) y en la copia de seguridad que descargues; el repositorio solo lleva los ejemplos.
@@ -59,7 +65,7 @@ Si se borra la app o los datos del navegador, lo guardado se pierde: la copia es
 
 ## Al actualizar la app
 
-En `index.html`, los archivos llevan un número de versión (`main.js?v=20261113l`). Cada vez que se cambie `main.js`, `style.css` o `viajes.js`, hay que cambiar ese número en `index.html` y subirlo también: así los móviles cargan la versión nueva en vez de la guardada.
+En `index.html`, los archivos llevan un número de versión (`main.js?v=20261113s`). Cada vez que se cambie `main.js`, `style.css` o `viajes.js`, hay que cambiar ese número en `index.html` y subirlo también: así los móviles cargan la versión nueva en vez de la guardada.
 
 ## Cambiar los ejemplos
 

@@ -298,6 +298,14 @@ img{max-width:100%}
 .m-ctrl [data-m="buscar"][aria-expanded="true"],.m-ctrl [data-m="full"][aria-pressed="true"],.m-ctrl [data-m="filtro"][aria-pressed="true"],.m-ctrl [data-m="fav"][aria-pressed="true"]{width:44px;height:44px}
 .m-ctrl [data-m="buscar"][aria-expanded="true"] .ic,.m-ctrl [data-m="full"][aria-pressed="true"] .ic,.m-ctrl [data-m="filtro"][aria-pressed="true"] .ic,.m-ctrl [data-m="fav"][aria-pressed="true"] .ic{width:22px;height:22px}
 .m-ctrl [data-m="filtro"][aria-pressed="true"] .ic{fill:currentColor}
+/* «Ver viajes»: avión; con un viaje en el mapa, embudo y número con su aro blanco */
+.m-bloque{margin-top:12px} /* separa los bloques de cada columna */
+@media (max-width:379px){ /* mapa bajito: botones algo menores para que no tapen el norte ni la escala */
+  .m-ctrl{gap:4px}
+  .m-ctrl button{width:34px;height:34px}
+  .m-bloque{margin-top:8px}
+}
+.m-num{position:absolute;right:-4px;bottom:-4px;display:grid;place-items:center;min-width:19px;height:19px;padding:0 4px;border-radius:999px;border:1.5px solid #fff;background:var(--surface);color:var(--titulo);font-size:.68rem;font-weight:700;line-height:1}
 /* Muestras de color de los mapas base */
 .sw{display:inline-grid;place-items:center;flex:none;width:22px;height:22px;border-radius:50%;border:1px solid #fff}
 .sw i{width:7px;height:7px;border-radius:50%;background:transparent}
@@ -320,7 +328,9 @@ img{max-width:100%}
 .m-menu button[aria-pressed="true"]{background:var(--acento);color:#fff}
 .m-menu .ic{color:inherit}
 .m-menu-n{display:inline-grid;place-items:center;flex:none;width:22px;height:22px;border-radius:50%;border:1px solid var(--oro);font-size:.75rem}
+
 .m-izq{right:auto;left:10px;align-items:flex-start}
+
 .m-busca{position:absolute;left:62px;top:10px;z-index:1001;display:flex;flex-wrap:wrap;align-items:center;gap:.4rem;width:calc(100% - 130px);max-width:440px;max-height:calc(100% - 20px);overflow:auto;padding:.4rem;border:1px solid var(--line);border-radius:14px;background:var(--card);box-shadow:var(--sombra)}
 .m-busca[hidden]{display:none}
 .m-busca input{flex:1;margin:0;padding:.4rem .6rem;-webkit-appearance:none;appearance:none}

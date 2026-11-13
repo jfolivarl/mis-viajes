@@ -1,7 +1,7 @@
 {
   "name": "Mis viajes",
   "short_name": "Mis viajes",
-  "description": "Álbum interactivo de viajes en forma de visor: mapa, fichas y fotos.",
+  "description": "Álbum interactivo de viajes en forma de visor: mapa, fichas, fotos y recuerdos.",
   "lang": "es",
   "start_url": "./",
   "scope": "./",

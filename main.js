@@ -1,7 +1,9 @@
 /* Mis viajes · álbum interactivo de viajes en forma de visor
-   Dos caras: la pública enseña viajes de ejemplo (viajes.js del repositorio) y la
-   privada guarda tus viajes y fotos solo en este dispositivo (IndexedDB), con copia
-   de seguridad en un zip. Mapa con Leaflet, fichas en carrusel y visor de fotos. */
+   Dos caras: la pública enseña viajes y recuerdos de ejemplo (viajes.js del repositorio)
+   y la privada guarda tus viajes, recuerdos y fotos solo en este dispositivo (IndexedDB),
+   con copia de seguridad en un zip.
+   Partes: utilidades y datos · mapa (Leaflet) · pestañas Viajes, Fotos y Recuerdos ·
+   visor de fotos · hojas de edición · copia de seguridad · rutas por hash (#fotos, #v/…). */
 (function () {
   'use strict';
 
@@ -259,14 +261,15 @@
       '<button type="button" data-m="mas" aria-label="Acercar">' + ico('mas') + '</button>' +
       '<button type="button" data-m="menos" aria-label="Alejar">' + ico('menos') + '</button>' +
       '<button type="button" data-m="todo" aria-label="Ver todo">' + ico('mundo') + '</button>' +
-      '<button type="button" data-m="full" aria-label="Mapa a pantalla completa" aria-pressed="false">' + ico('full') + '</button>' +
-      '<button type="button" data-m="yo" aria-label="Mi ubicación" aria-pressed="false">' + ico('yo') + '</button>';
+      '<button type="button" class="m-bloque" data-m="yo" aria-label="Mi ubicación" aria-pressed="false">' + ico('yo') + '</button>' +
+      '<button type="button" data-m="full" aria-label="Mapa a pantalla completa" aria-pressed="false">' + ico('full') + '</button>';
+    /* Derecha: buscar y capas; en un segundo bloque, qué viajes se ven (Ver viajes y corazón) */
     const ctrl = L.DomUtil.create('div', 'm-ctrl', el);
     ctrl.innerHTML =
       '<button type="button" data-m="buscar" aria-label="Buscar una dirección o un lugar" aria-expanded="false">' + ico('lupa') + '</button>' +
       '<button type="button" data-m="capa" aria-label="Elegir el mapa base" aria-haspopup="true" aria-expanded="false">' + ico('capas') + '<span class="sw sw-mini" aria-hidden="true"><i></i></span></button>' +
-      '<button type="button" class="cz" data-m="fav" aria-label="Modo corazón: ver solo las fotos favoritas" aria-pressed="false">' + ico('corazon') + '</button>' +
-      '<button type="button" data-m="filtro" aria-label="Ver viajes" title="Ver viajes" aria-haspopup="true" aria-expanded="false" aria-pressed="false">' + ico('filtro') + '</button>';
+      '<button type="button" class="m-bloque" data-m="filtro" aria-haspopup="true" aria-expanded="false" aria-pressed="false"></button>' +
+      '<button type="button" class="cz" data-m="fav" aria-label="Modo corazón: ver solo las fotos favoritas" aria-pressed="false">' + ico('corazon') + '</button>';
     const bFav = ctrl.querySelector('[data-m="fav"]'), bFiltro = ctrl.querySelector('[data-m="filtro"]');
     ponerBase(base);
     [izq, ctrl].forEach(c => { L.DomEvent.disableClickPropagation(c); L.DomEvent.disableScrollPropagation(c); });
@@ -365,10 +368,12 @@
       base: ponerBase,
       favorito(on) { bFav.setAttribute('aria-pressed', on); bFav.setAttribute('aria-label', on ? 'Quitar el modo corazón' : 'Modo corazón: ver solo las fotos favoritas'); },
       /* El botón del filtro crece cuando el mapa enseña un solo viaje */
-      filtrado(v) {
-        bFiltro.setAttribute('aria-pressed', !!v);
-        bFiltro.setAttribute('aria-label', v ? 'Viaje en el mapa: ' + v + '. Toca para ver viajes' : 'Ver viajes');
-        bFiltro.title = v ? v : 'Ver viajes';
+      /* «Ver viajes»: apagado, un avión; con un viaje en el mapa, el embudo relleno con el número de ese viaje */
+      filtrado(titulo, num) {
+        bFiltro.setAttribute('aria-pressed', !!titulo);
+        bFiltro.setAttribute('aria-label', titulo ? 'Viaje ' + (num ? num + ' ' : '') + 'en el mapa: ' + titulo + '. Toca para ver viajes' : 'Ver viajes');
+        bFiltro.title = titulo || 'Ver viajes';
+        bFiltro.innerHTML = titulo ? ico('filtro') + (num ? '<span class="m-num" aria-hidden="true">' + num + '</span>' : '') : ico('avion');
       },
       tam() { map.invalidateSize({ pan: false }); },
       zoom: () => map.getZoom(),
@@ -421,6 +426,7 @@
       },
       quitarYo() { if (yo) { yo.remove(); yoAcc.remove(); yo = yoAcc = null; } }
     };
+    api.filtrado(null); /* el botón empieza como «Ver viajes» */
     return api;
   }
 
@@ -834,7 +840,7 @@
     const todos = ubicados(v), favs = todos.filter(o => o.fav), p = posicion(v);
     const g = soloFav ? favs : todos; /* en modo corazón, solo las favoritas */
     mapa.cerrarVentana();
-    mapa.filtrado(v.titulo);
+    mapa.filtrado(v.titulo, numeros().get(v.id));
     mapa.ruta(g.length > 1 ? g.map(o => [o.lat, o.lng]) : null);
     if (g.length) {
       const pts = g.map(o => ({ id: o.id, lat: o.lat, lng: o.lng, p: o }));
@@ -905,7 +911,7 @@
     if (seguir && f && f.dataset.id) { mapaViaje(porId(f.dataset.id), true); return; }
     mapaTodos(datos, tocarViaje, soloFav);
   }
-  /* Modo corazón: un solo estado para el corazón del mapa, la pestaña y el filtro de Fotos.
+  /* Modo corazón: un solo estado para el corazón del mapa y los de Fotos y Recuerdos.
      Tocar cualquiera de ellos lo enciende o lo apaga en toda la app. */
   function ponerFav(on) {
     if (on && !conRecuerdos().some(esFav)) { toast('Aún no hay favoritas. Abre una foto y toca el corazón.'); return; }
@@ -1149,8 +1155,16 @@
   const menu = $('#m-menu');
   let menuBoton = null;
   mapa.alFiltro = b => { if (!menu.hidden && menuBoton === b) cerrarMenu(); else { cerrarBusca(); cerrarMenu(); abrirMenu(b); } };
+  /* El desplegable se abre entre las dos columnas de botones, sin taparlas */
+  function colocarMenu(b) {
+    const caja = menu.parentElement.getBoundingClientRect(), col = b.parentElement.getBoundingClientRect(),
+      izq = $('.m-izq', menu.parentElement), tope = izq ? izq.getBoundingClientRect().right + 8 : caja.left + 10;
+    menu.style.right = Math.round(caja.right - col.left + 8) + 'px';
+    menu.style.width = Math.round(Math.min(250, col.left - 8 - tope)) + 'px'; /* sin tapar la columna de la izquierda */
+  }
   function abrirMenu(b) {
     menuBoton = b;
+    colocarMenu(b);
     const actual = viajeActual ? viajeActual.id : enMapa, nums = numeros();
     menu.innerHTML = '<p class="m-menu-t">Ver viajes</p>' +
       '<button type="button" data-filtro="" aria-pressed="' + !actual + '">' + ico('mundo') + 'Todos los viajes</button>' +
@@ -1163,6 +1177,7 @@
   }
   function abrirCapas(b) {
     menuBoton = b;
+    colocarMenu(b);
     menu.innerHTML = '<p class="m-menu-t">Mapa base</p>' + mapa.bases().map(x =>
       '<button type="button" data-base="' + x.k + '" aria-pressed="' + x.activa + '"><span class="sw" data-b="' + x.k + '" aria-hidden="true"><i></i></span>' + x.nombre + '</button>').join('');
     menu.hidden = false;

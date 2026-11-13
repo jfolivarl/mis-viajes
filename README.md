@@ -23,20 +23,23 @@ Si se borra la app o los datos del navegador, lo guardado se pierde: la copia es
 | `index.html`, `style.css`, `main.js` | La app: mapa, fichas, galería, visor, editor y copia de seguridad. |
 | `leaflet.js`, `leaflet.css`, `LICENSE-leaflet.txt` | Leaflet 1.9.4 (librería del mapa), guardada en el repositorio. |
 | `viajes.js` | Los **viajes de ejemplo** de la cara pública. |
-| `miami-*.jpg`, `ocean-cay-*.jpg`, `manizales-*.jpg`, `disney-*.jpg`, `mogan-*.jpg` | Fotos de los ejemplos. |
+| `miami-*.jpg`, `ocean-cay-*.jpg`, `manizales-*.jpg`, `disney-*.jpg`, `mogan-*.jpg`, `burdeos-*.jpg` | Fotos de los ejemplos (burdeos, del recuerdo de ejemplo). |
 | `logo.png`, `icon-192.png`, `icon-512.png`, `icon-maskable.png`, `apple-touch-icon.png`, `manifest.webmanifest` | Logo e iconos para instalarla como app. |
 | `robots.txt` | Pide a los buscadores que no la indexen. |
 
 ## Cómo se usa
 
-- **Pestañas:** Viajes y Fotos se cambian tocando o deslizando a los lados. Al tocarlas, la página baja hasta el contenido.
-- **Modo corazón:** el corazón de las pestañas, el del mapa y el del filtro de Fotos son el mismo interruptor. Encendido, el mapa enseña solo las fotos favoritas, las demás miniaturas se atenúan y las favoritas llevan el corazón turquesa. Tocando cualquier corazón se apaga en toda la app. Una foto se marca como favorita desde su visor.
+- **Pestañas:** Viajes, Fotos y Recuerdos se cambian tocando o deslizando a los lados. Al tocarlas, la página baja hasta el contenido.
+- **Modo corazón:** el corazón del mapa y el del filtro de Fotos son el mismo interruptor (apagado: bolita dorada con corazón turquesa; encendido: corazón blanco sobre turquesa). Encendido, el mapa enseña solo las fotos favoritas, las demás miniaturas se atenúan y las favoritas llevan el corazón turquesa. Tocando cualquier corazón se apaga en toda la app. Una foto se marca como favorita desde su visor.
 - **Números de viaje:** cronológicos: el más antiguo es el 1 y el más reciente el último. Son los mismos en fichas, Fotos y el menú «Ver viajes», y en fichas y Fotos van con la palabra «Viaje».
-- **Botones del mapa:** a la derecha, búsqueda, capas, corazón y «Ver viajes». Al activarse, búsqueda, pantalla completa y «Ver viajes» crecen un poco y el corazón algo más; capas, acercar, alejar y el planeta solo se iluminan.
+- **Botones del mapa:** a la derecha, búsqueda, capas, corazón y «Ver viajes». Al activarse, búsqueda, pantalla completa, corazón y «Ver viajes» crecen igual; capas, acercar, alejar y el planeta solo se iluminan. El planeta (y el logo) vuelve a «Todos los viajes».
 - **Viajes:** carrusel de fichas. El mapa enseña el viaje (o sus favoritas, en modo corazón) de la ficha que tienes delante. Al final, la ficha punteada **Añadir viaje**. En tablet y ordenador hay botones Anterior y Siguiente.
 - **Ver viajes** (embudo del mapa): elegir un viaje o verlos todos. Cuando el mapa enseña un solo viaje, el botón crece y se rellena.
 - **Título de la ficha** o «N fotos y mapa»: abre el viaje con su galería. Dentro de un viaje, los botones de abajo, deslizar a los lados (móvil) o las flechas del teclado (ordenador) pasan al viaje anterior o al siguiente.
-- **Fotos:** viajes por años con su número de viaje («Viaje 1», «Viaje 2»…). Las flechas de los años (o deslizar el dedo sobre ellos) seleccionan el año de al lado, de uno en uno: Todos › 2025 › 2024…
+- **Fotos:** viajes por años con su número de viaje («Viaje 1», «Viaje 2»…). Las flechas de los años (o deslizar el dedo sobre ellos) seleccionan el año de al lado, de uno en uno: Todos › 2025 › 2024… El botón junto al título cambia entre **lista** (una fila por viaje) y **mosaico** (todas las fotos en cuadros); la app recuerda la elegida.
+- **Recuerdos** (icono de la foto colgada con chincheta): sitios sueltos que no son un viaje (una escapada, una cena…), con nombre, fecha, comentario y foto, en lista o mosaico, con «Todos», corazón y años como en Fotos, y con su propio icono en el mapa. Se guardan en la copia de seguridad. Desde «Editar recuerdo › Dónde se guarda» se pasan a un viaje o a un viaje nuevo.
+- **Mi ubicación** (flecha, abajo en la columna izquierda del mapa): enseña dónde estás con una esferita azul, como en el iPhone. Su ventana permite **Guardar aquí como recuerdo** (se guarda al momento con el sitio y la hora; luego puedes añadir foto o nota), **Empezar un viaje aquí** o **Agregar a un viaje**. No se guarda ni se envía a ningún sitio. Necesita permiso de ubicación y https.
+- **Marcar un sitio:** mantén el dedo pulsado en el mapa (clic derecho en el ordenador) o búscalo con la lupa. Su ventana ofrece **Guardar como recuerdo**, **Crear viaje** o **Agregar a un viaje**.
 - **Ampliar una foto:** en el visor, con la lupa, doble toque, pellizco o la rueda del ratón; arrastra para moverla. Las fotos nuevas se guardan a 2560 px para que se vean nítidas.
 - **Editar:** Modificar la ficha, adjuntar imágenes o PDF (clip), añadir fotos, crear puntos, arrastrar marcadores.
 - **Añadir fotos:** Fototeca, cámara o Archivos. Para que lleven ubicación: Fotos › Compartir › Opciones › **Ubicación** › Guardar en Archivos, y elegirlas con Explorar. Las que no la tengan: abrirlas › **Colocar en el mapa**.
@@ -46,11 +49,11 @@ Si se borra la app o los datos del navegador, lo guardado se pierde: la copia es
 - **Pantalla completa:** botón de las flechas hacia fuera (crece y las flechas miran hacia dentro al activarlo); al tocar un viaje sale su ventana con la portada y el enlace a sus fotos. El logo del mapa hace de botón del planeta. Se sale con el mismo botón o con Escape.
 - El mapa lleva **norte y escala** abajo a la izquierda.
 - **Buscar** (lupa): escribe una dirección o un lugar y pulsa Buscar. Al elegir un resultado aparece un marcador de ubicación; desde su ventana se añade como punto a un viaje (y ahí se le pone nombre, fecha, comentario y foto). Necesita conexión.
-- **Pasar un punto a otro viaje:** Editar punto › campo «Viaje».
+- **Pasar un punto a otro viaje:** Editar punto › campo «Dónde se guarda» (otro viaje, Recuerdos o un viaje nuevo).
 
 ## Al actualizar la app
 
-En `index.html`, los archivos llevan un número de versión (`main.js?v=20261113d`). Cada vez que se cambie `main.js`, `style.css` o `viajes.js`, hay que cambiar ese número en `index.html` y subirlo también: así los móviles cargan la versión nueva en vez de la guardada.
+En `index.html`, los archivos llevan un número de versión (`main.js?v=20261113h`). Cada vez que se cambie `main.js`, `style.css` o `viajes.js`, hay que cambiar ese número en `index.html` y subirlo también: así los móviles cargan la versión nueva en vez de la guardada.
 
 ## Cambiar los ejemplos
 

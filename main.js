@@ -87,7 +87,18 @@
     }
     return d;
   }
-  let datos = ejemplos();
+  /* Recuerdos: sitios sueltos que no son un viaje. Se guardan junto a los viajes (con «recuerdos: true»),
+     así entran en la copia de seguridad sin cambiar su formato */
+  const recVacio = () => ({ id: 'recuerdos', recuerdos: true, titulo: 'Recuerdos', puntos: [] });
+  let rec = recVacio();
+  function separar(lista) {
+    const i = lista.findIndex(v => v && v.recuerdos);
+    rec = i >= 0 ? lista.splice(i, 1)[0] : recVacio();
+    rec.puntos = rec.puntos || [];
+    return lista;
+  }
+  const conRecuerdos = () => rec.puntos.length ? datos.concat([rec]) : datos;
+  let datos = separar(ejemplos());
   let editando = false;
   const arch = new Map();     // nombre de archivo -> { blob, url } (fotos y adjuntos propios)
 
@@ -131,7 +142,7 @@
   function guardar() {
     if (modo !== 'mios') return;
     hayMios = true;
-    IDB.poner(CLAVE_DATOS, JSON.stringify(datos));
+    IDB.poner(CLAVE_DATOS, JSON.stringify(conRecuerdos()));
     LS.poner('pendiente', '1');
     LS.poner('x-copia', null);
     pintarAviso();
@@ -144,7 +155,7 @@
     arch.set(nombre, { blob, url: URL.createObjectURL(blob) });
   }
 
-  const porId = id => datos.find(v => v.id === id);
+  const porId = id => id === rec.id ? rec : datos.find(v => v.id === id);
   const ordenados = () => datos.slice().sort((a, b) => cmp(b.desde || '', a.desde || ''));
   /* Número de cada viaje por orden cronológico: el más antiguo es el 1 y el más reciente el último.
      Los que aún no tienen fecha van detrás, en el orden en que se crearon. */
@@ -173,7 +184,7 @@
   const posicion = v => v.lat != null ? { lat: v.lat, lng: v.lng } : centroPuntos(v);
   function referenciadas() {
     const s = new Set();
-    datos.forEach(v => {
+    conRecuerdos().forEach(v => {
       puntosDe(v).forEach(p => { if (p.f) s.add(p.f); });
       adjuntosDe(v).forEach(a => s.add(a.f));
     });
@@ -248,7 +259,8 @@
       '<button type="button" data-m="mas" aria-label="Acercar">' + ico('mas') + '</button>' +
       '<button type="button" data-m="menos" aria-label="Alejar">' + ico('menos') + '</button>' +
       '<button type="button" data-m="todo" aria-label="Ver todo">' + ico('mundo') + '</button>' +
-      '<button type="button" data-m="full" aria-label="Mapa a pantalla completa" aria-pressed="false">' + ico('full') + '</button>';
+      '<button type="button" data-m="full" aria-label="Mapa a pantalla completa" aria-pressed="false">' + ico('full') + '</button>' +
+      '<button type="button" data-m="yo" aria-label="Mi ubicación" aria-pressed="false">' + ico('yo') + '</button>';
     const ctrl = L.DomUtil.create('div', 'm-ctrl', el);
     ctrl.innerHTML =
       '<button type="button" data-m="buscar" aria-label="Buscar una dirección o un lugar" aria-expanded="false">' + ico('lupa') + '</button>' +
@@ -279,7 +291,7 @@
 
     let puntos = [], fabrica = null, tocar = null, mover = null, resalte = null, linea = null;
     const grupo = L.layerGroup().addTo(map);
-    let pin = null;
+    let pin = null, yo = null, yoAcc = null;
 
     function pintarMarcas() {
       grupo.clearLayers();
@@ -291,7 +303,7 @@
         if (g) g.items.push(p); else grupos.push({ x: q.x, y: q.y, items: [p] });
       });
       grupos.forEach(g => {
-        const p = g.items[0], solo = g.items.length === 1, f = fabrica(g.items), arrastra = !!(mover && solo);
+        const p = g.items[0], solo = g.items.length === 1, f = fabrica(g.items), arrastra = !!(mover && solo && f.mov !== false);
         const m = L.marker([p.lat, p.lng], {
           icon: L.divIcon({ className: 'm-m ' + f.clase + (arrastra ? ' mov' : ''), html: f.html, iconSize: [f.tam, f.tam] }),
           draggable: arrastra, keyboard: true, riseOnHover: true, autoPanOnFocus: false
@@ -311,6 +323,8 @@
       api.resaltar(resalte);
     }
     map.on('zoomend', pintarMarcas);
+    /* Mantener el dedo pulsado (o clic derecho) marca un sitio */
+    map.on('contextmenu', e => { if (api.alMarcar) api.alMarcar(e.latlng.wrap()); });
     map.on('click', e => { if (document.body.classList.contains('eligiendo')) map.panTo(e.latlng); });
 
     const alClic = e => {
@@ -329,6 +343,7 @@
       else if (a === 'full') { if (api.alFull) api.alFull(b); }
       else if (a === 'fav') { if (api.alFav) api.alFav(); }
       else if (a === 'buscar') { if (api.alBuscar) api.alBuscar(b); }
+      else if (a === 'yo') { if (api.alYo) api.alYo(b); }
       else if (a === 'capa') { if (api.alCapa) api.alCapa(b); }
     };
     izq.addEventListener('click', alClic);
@@ -338,6 +353,9 @@
     const api = {
       verTodo: null,
       alTodo: null,
+      alMarcar: null,
+      alYo: null,
+      alTocarYo: null,
       alFiltro: null,
       alFav: null,
       alFull: null,
@@ -382,9 +400,9 @@
       },
       cerrarVentana() { map.closePopup(); },
       /* Chincheta de un lugar buscado, con su ventana */
-      pin(la, ln, nodo) {
+      pin(la, ln, nodo, sinZoom) {
         api.quitarPin();
-        map.setView([la, ln], Math.max(map.getZoom(), 15), { animate: false });
+        if (!sinZoom) map.setView([la, ln], Math.max(map.getZoom(), 15), { animate: false });
         pin = L.marker([la, ln], {
           icon: L.divIcon({ className: 'm-pin', iconSize: [34, 42], iconAnchor: [17, 41], popupAnchor: [0, -38],
             html: '<svg viewBox="0 0 34 42" aria-hidden="true"><path d="M17 41S2.5 26.5 2.5 16a14.5 14.5 0 0 1 29 0C31.5 26.5 17 41 17 41z"/><circle cx="17" cy="16" r="5.5"/></svg>' }),
@@ -392,7 +410,16 @@
         }).addTo(map);
         pin.bindPopup(nodo, { maxWidth: 260, className: 'm-pop', autoPanPaddingTopLeft: [60, 16], autoPanPaddingBottomRight: [62, 50] }).openPopup();
       },
-      quitarPin() { if (pin) { pin.remove(); pin = null; } }
+      quitarPin() { if (pin) { pin.remove(); pin = null; } },
+      /* Mi ubicación: esferita azul con su círculo de precisión */
+      yo(la, ln, acc) {
+        if (!yo) {
+          yoAcc = L.circle([la, ln], { radius: acc, className: 'm-yo-acc', weight: 1, interactive: false }).addTo(map);
+          yo = L.marker([la, ln], { icon: L.divIcon({ className: 'm-yo', iconSize: [20, 20] }), zIndexOffset: 3000, keyboard: true, alt: 'Estás aquí' }).addTo(map);
+          yo.on('click', () => { if (api.alTocarYo) api.alTocarYo(); });
+        } else { yo.setLatLng([la, ln]); yoAcc.setLatLng([la, ln]).setRadius(acc); }
+      },
+      quitarYo() { if (yo) { yo.remove(); yoAcc.remove(); yo = yoAcc = null; } }
     };
     return api;
   }
@@ -568,7 +595,7 @@
   let copia = null; // { file, url }
   async function prepararCopia() {
     const enc = new TextEncoder(), lista = [];
-    lista.push({ nombre: 'viajes.json', datos: enc.encode(JSON.stringify({ app: 'mis-viajes', version: 1, fecha: new Date().toISOString(), viajes: datos }, null, 1)) });
+    lista.push({ nombre: 'viajes.json', datos: enc.encode(JSON.stringify({ app: 'mis-viajes', version: 1, fecha: new Date().toISOString(), viajes: conRecuerdos() }, null, 1)) });
     for (const f of referenciadas()) {
       if (arch.has(f)) lista.push({ nombre: f, datos: new Uint8Array(await arch.get(f).blob.arrayBuffer()) });
     }
@@ -655,7 +682,7 @@
       await guardarArchivo(nombre, new Blob([partes[nombre]], { type: tipo }));
       n++;
     }
-    datos = lista;
+    datos = separar(lista);
     modo = 'mios';
     LS.poner('modo', 'mios');
     pintarCabecera();
@@ -666,20 +693,20 @@
     history.replaceState({}, '', location.pathname + location.search);
     aplicado = null;
     aplicar();
-    toast('Copia restaurada: ' + plural(lista.length, 'viaje', 'viajes') + ' y ' + plural(n, 'archivo', 'archivos'));
+    toast('Copia restaurada: ' + plural(datos.length, 'viaje', 'viajes') + (rec.puntos.length ? ', ' + plural(rec.puntos.length, 'recuerdo', 'recuerdos') : '') + ' y ' + plural(n, 'archivo', 'archivos'));
   }
   async function cambiarModo(m) {
     if (m === 'mios') {
       const lista = await IDB.todo();
       const d = (lista || []).find(x => x[0] === CLAVE_DATOS);
       if (d) {
-        datos = JSON.parse(d[1]);
+        datos = separar(JSON.parse(d[1]));
         (lista || []).forEach(([k, b]) => { if (k !== CLAVE_DATOS && !arch.has(k)) arch.set(k, { blob: b, url: URL.createObjectURL(b) }); });
         hayMios = true;
-      } else { datos = []; hayMios = true; IDB.poner(CLAVE_DATOS, '[]'); }
+      } else { datos = separar([]); hayMios = true; IDB.poner(CLAVE_DATOS, '[]'); }
       persistir();
     } else {
-      datos = ejemplos();
+      datos = separar(ejemplos());
       ponerEdicion(false);
     }
     modo = m;
@@ -697,15 +724,15 @@
   /* ===================== Interfaz ===================== */
   const mapa = crearMapa($('#mapa'));
   const panel = $('#panel');
-  let filtro = '', vistaKey = '', viajeActual = null, fichaEd = null, fichaVer = null;
+  let filtro = '', filtroRec = '', vistaKey = '', viajeActual = null, fichaEd = null, fichaVer = null; /* años elegidos en Fotos y en Recuerdos */
   let tab = 'viajes', seguir = true, enMapa = null, soloFav = false;
-  const TABS = ['viajes', 'fotos', 'favs'], HASH = { viajes: '#', fotos: '#fotos', favs: '#favoritos' };
+  const TABS = ['viajes', 'fotos', 'rec'], HASH = { viajes: '#', fotos: '#fotos', rec: '#recuerdos' };
   const esFav = v => puntosDe(v).some(p => p.fav); /* los favoritos son solo de fotos */
   const nFav = () => datos.reduce((n, v) => n + puntosDe(v).filter(p => p.fav).length, 0);
   function guardarFav() {
     if (modo === 'mios') { guardar(); return; }
     const k = [];
-    datos.forEach(v => puntosDe(v).forEach(p => { if (p.fav) k.push(v.id + '/' + p.id); }));
+    conRecuerdos().forEach(v => puntosDe(v).forEach(p => { if (p.fav) k.push(v.id + '/' + p.id); }));
     LS.poner('fav-ej', JSON.stringify(k));
   }
   function altoMapa() {
@@ -720,7 +747,7 @@
     anchoPrevio = innerWidth;
     altoMapa();
     const pg = $('.pager', panel);
-    if (pg) pg.scrollLeft = TABS.indexOf(tab) * pg.clientWidth; /* al girar el móvil, seguir en la misma pestaña */
+    if (pg) { pg.scrollLeft = TABS.indexOf(tab) * pg.clientWidth; moverBarra(TABS.indexOf(tab)); } /* al girar el móvil, seguir en la misma pestaña */
   });
 
   function pintarCabecera() {
@@ -761,30 +788,46 @@
     };
   }
 
+  function marcaRecuerdo(items) {
+    const p = items[0].p, n = items.length;
+    return {
+      clase: 'm-r', tam: p.f ? 38 : 32,
+      titulo: n > 1 ? n + ' recuerdos aquí' : 'Recuerdo: ' + nombrePunto(p),
+      html: (p.f ? '<img src="' + src(p.f) + '" alt="">' : ico('recuerdo')) + (n > 1 ? '<span class="m-n">' + n + '</span>' : '')
+    };
+  }
+  const puntosRec = () => ubicados(rec).filter(o => (!soloFav || o.fav) && (tab !== 'rec' || !filtroRec || anioP(o) === filtroRec)).map(o => ({ id: 'recuerdos/' + o.id, lat: o.lat, lng: o.lng, v: rec, p: o }));
+  function tocarRecuerdo(p) {
+    if (p.f) { secModo = 'rec'; abrirFoto(rec, p.id); } else ventanaPunto(rec, p);
+  }
+
   /* ---------- Mapa: todos los viajes o uno ---------- */
-  function mapaTodos(lista, tocar, fav) {
+  function mapaTodos(lista, tocar, fav, soloRec) {
     enMapa = null;
     const pts = [];
-    lista.forEach(v => {
+    if (!soloRec) lista.forEach(v => {
       const p = posicion(v);
       if (p && !fav) pts.push({ id: v.id, lat: p.lat, lng: p.lng, v });
       if (fav) ubicados(v).filter(o => o.fav && o.f).forEach(o => pts.push({ id: v.id + '/' + o.id, lat: o.lat, lng: o.lng, v, p: o }));
     });
+    puntosRec().forEach(o => pts.push(o));
     mapa.ruta(null);
     mapa.cerrarVentana();
     mapa.filtrado(null);
-    mapa.marcas(pts, items => items[0].p ? marcaPunto(items) : marcaViaje(items), grupo => {
+    const esRec = it => it.v === rec;
+    mapa.marcas(pts, items => esRec(items[0]) ? marcaRecuerdo(items) : Object.assign(items[0].p ? marcaPunto(items) : marcaViaje(items), { mov: false }), grupo => {
       if (grupo.length > 1 && mapa.zoom() <= 15) mapa.ajustar(grupo, 16);
+      else if (esRec(grupo[0])) tocarRecuerdo(grupo[0].p);
       else if (grupo[0].p) abrirFoto(grupo[0].v, grupo[0].p.id);
       else tocar(grupo[0].v);
-    });
+    }, editando ? (o, pos) => { o.p.lat = pos.lat; o.p.lng = pos.lng; guardar(); toast('Recuerdo movido'); } : null); /* solo los recuerdos se arrastran aquí */
     mapa.verTodo = () => { if (pts.length) mapa.ajustar(pts, 6); else mapa.volar(25, -20, 2); };
     mapa.verTodo();
   }
   function ventanaPunto(v, p) {
     mapa.ventana(p.lat, p.lng, '<b>' + esc(nombrePunto(p)) + '</b>' + (p.fecha ? '<br><small>' + fechaTxt(p.fecha) + '</small>' : '') +
       (p.txt && p.nombre ? '<br>' + esc(p.txt) : '') +
-      (editando ? '<br><a class="pill" href="#punto/' + v.id + '/' + p.id + '">' + ico('lapiz') + 'Editar punto</a>' : ''));
+      (editando ? '<br><a class="pill" href="#punto/' + v.id + '/' + p.id + '">' + ico('lapiz') + (v.recuerdos ? 'Editar recuerdo' : 'Editar punto') + '</a>' : ''));
   }
   function mapaViaje(v, ajustar) {
     enMapa = v.id;
@@ -829,12 +872,13 @@
   function verTodosViajes() {
     cerrarMenu();
     mapa.cerrarVentana();
-    const habiaAnio = !!filtro;
+    const habiaAnio = !!(filtro || filtroRec);
     filtro = '';
+    filtroRec = '';
     if (viajeActual) ir(HASH[tab]);
     else if (habiaAnio) pintarPanel('inicio', null);
     seguir = false;
-    mapaTodos(tab === 'viajes' ? datos : visFotos(), tocarViaje, soloFav);
+    mapaTodos(tab === 'viajes' ? datos : visFotos(), tocarViaje, soloFav, tab === 'rec');
   }
   mapa.alTodo = verTodosViajes;
   $('#m-logo').addEventListener('click', verTodosViajes); /* como el botón del planeta */
@@ -855,6 +899,7 @@
     return filtro ? l.filter(v => anio(v) === filtro) : l;
   }
   function mapaInicio() {
+    if (tab === 'rec') { mapaTodos([], tocarViaje, soloFav, true); return; }
     if (tab !== 'viajes') { mapaTodos(visFotos(), tocarViaje, soloFav); return; }
     const f = fichaActual();
     if (seguir && f && f.dataset.id) { mapaViaje(porId(f.dataset.id), true); return; }
@@ -863,7 +908,7 @@
   /* Modo corazón: un solo estado para el corazón del mapa, la pestaña y el filtro de Fotos.
      Tocar cualquiera de ellos lo enciende o lo apaga en toda la app. */
   function ponerFav(on) {
-    if (on && !datos.some(esFav)) { toast('Aún no hay favoritas. Abre una foto y toca el corazón.'); return; }
+    if (on && !conRecuerdos().some(esFav)) { toast('Aún no hay favoritas. Abre una foto y toca el corazón.'); return; }
     soloFav = on;
     mapa.favorito(on);
     document.body.classList.toggle('modo-fav', on);
@@ -874,10 +919,12 @@
   /* Cuando cambia una favorita desde el visor */
   function refrescarFav(p) {
     panel.querySelectorAll('.ft[data-p="' + p.id + '"]').forEach(f => f.classList.toggle('fav', !!p.fav));
-    const pf = $('[data-pag="favs"]', panel), nb = $('.tab-fav b', panel);
-    if (pf) pf.innerHTML = pintarFavs();
-    if (nb) nb.textContent = nFav();
-    if (soloFav && !datos.some(esFav)) { ponerFav(false); return; }
+    if (soloFav && !viajeActual && pager()) { /* con el corazón, la lista o el mosaico cambian */
+      const pf = $('[data-pag="fotos"]', panel), pr = $('[data-pag="rec"]', panel);
+      if (pf) pf.innerHTML = pintarFotos();
+      if (pr) pr.innerHTML = pintarRecuerdos();
+    }
+    if (soloFav && !conRecuerdos().some(esFav)) { ponerFav(false); return; }
     if (soloFav && viajeActual) mapaViaje(viajeActual, false);
   }
 
@@ -945,34 +992,157 @@
     cerrarBusca();
     ponerPin(hallados[+b.dataset.res]);
   });
-  function ponerPin(x) {
+  /* Un sitio marcado (buscado o con el dedo pulsado): guardarlo como recuerdo, agregarlo a un viaje o crear un viaje con él */
+  /* La ventana de un sitio (buscado, marcado con el dedo o «estás aquí»): guardarlo como recuerdo, crear un viaje o agregarlo a uno */
+  const ahora = () => { const d = new Date(), z = n => String(n).padStart(2, '0'); return hoyIso() + 'T' + z(d.getHours()) + ':' + z(d.getMinutes()); };
+  function nodoSitio(x, aqui) {
     const d = document.createElement('div');
     d.className = 'pin-pop';
     const lista = ordenados().filter(v => !v.nueva);
     if (viajeActual && lista.indexOf(viajeActual) > 0) { lista.splice(lista.indexOf(viajeActual), 1); lista.unshift(viajeActual); }
-    d.innerHTML = '<b>' + esc(x.nombre) + '</b><small>' + esc(x.txt) + '</small>' +
+    d.innerHTML = '<b class="pin-n">' + esc(x.nombre) + '</b><small class="pin-t">' + esc(x.txt) + '</small>' +
       (modo !== 'mios' ? '<button type="button" class="pill pri" data-pin="privado">Guardar en mis viajes</button>'
-        : lista.length ? '<p class="nota">Añadir como punto a:</p>' + lista.map(v => '<button type="button" class="pill' + (v === viajeActual ? ' pri' : '') +
-            '" data-pin="' + v.id + '">' + ico('mas') + '<span>' + esc(v.titulo) + '</span></button>').join('')
-          : '<p class="nota">Crea antes un viaje para guardar este punto.</p>') +
-      '<button type="button" class="pill peligro" data-pin="">' + ico('x') + 'Quitar del mapa</button>';
+        : '<button type="button" class="pill pri" data-pin="recuerdos">' + ico('recuerdo') + (aqui ? 'Guardar aquí como recuerdo' : 'Guardar como recuerdo') + '</button>' +
+          '<button type="button" class="pill" data-pin="__nuevo">' + ico('mas') + (aqui ? 'Empezar un viaje aquí' : 'Crear viaje') + '</button>' +
+          (lista.length ? '<p class="nota">Agregar a un viaje:</p>' + lista.map(v => '<button type="button" class="pill' + (v === viajeActual ? ' suave' : '') +
+            '" data-pin="' + v.id + '">' + ico('pin') + '<span>' + esc(v.titulo) + '</span></button>').join('') : '')) +
+      '<button type="button" class="pill peligro" data-pin="">' + ico('x') + (aqui ? 'Ocultar mi ubicación' : 'Quitar del mapa') + '</button>';
     d.addEventListener('click', e => {
       const b = e.target.closest('[data-pin]');
       if (!b) return;
       const id = b.dataset.pin;
-      if (!id) { mapa.quitarPin(); return; }
       if (full) ponerFull(false);
-      if (id === 'privado') { mapa.cerrarVentana(); ir('#privado', false, { capa: true }); return; }
+      if (id === 'privado') { mapa.cerrarVentana(); ir('#privado', false, { capa: true }); return; } /* la chincheta se queda para luego */
+      if (aqui) mapa.cerrarVentana(); else mapa.quitarPin();
+      if (!id) { if (aqui) pararYo(); return; }
+      if (!editando) { ponerEdicion(true); pintarPanel(viajeActual ? 'viaje' : 'inicio', viajeActual); }
+      const fecha = aqui ? ahora() : '';
+      if (id === '__nuevo') {
+        const p = { nombre: x.nombre, lat: x.lat, lng: x.lng };
+        if (fecha) p.fecha = fecha;
+        fichaEd = { id: idLibre('nuevo-viaje'), titulo: 'Nuevo viaje', puntos: [], nueva: true, lat: x.lat, lng: x.lng, traer: { p } };
+        ir('#ficha/' + fichaEd.id, false, { capa: true });
+        return;
+      }
       const v = porId(id);
       if (!v) return;
-      mapa.quitarPin();
-      if (!editando) ponerEdicion(true);
+      if (v.recuerdos && aqui) { guardarAqui(x, fecha); return; }
       posNueva = { lat: x.lat, lng: x.lng };
       nombreNuevo = x.nombre;
-      if (viajeActual !== v) ir('#v/' + v.id); /* así, al guardar, se vuelve al viaje */
+      fechaNueva = fecha;
+      if (v.recuerdos) { if (viajeActual || tab !== 'rec') ir('#recuerdos'); } /* así, al guardar, se queda en Recuerdos */
+      else if (viajeActual !== v) ir('#v/' + v.id); /* así, al guardar, se vuelve al viaje */
       ir('#nuevo-punto/' + v.id, false, { capa: true });
     });
-    mapa.pin(x.lat, x.lng, d);
+    return d;
+  }
+  function ponerPin(x, sinZoom) {
+    const d = nodoSitio(x, false);
+    mapa.pin(x.lat, x.lng, d, sinZoom);
+    return d;
+  }
+  /* «Estás aquí» se guarda al momento como recuerdo, con su sitio y la hora; luego se le puede añadir foto o nota */
+  function guardarAqui(x, fecha) {
+    const p = { id: nuevoId(rec), nombre: x.nombre === 'Estás aquí' ? 'Aquí estuve' : x.nombre, fecha, lat: x.lat, lng: x.lng };
+    rec.puntos.push(p);
+    guardar();
+    filtroRec = '';
+    if (!viajeActual) pintarPanel('inicio', null, true);
+    if (viajeActual || tab !== 'rec') ir('#recuerdos');
+    ir('#punto/recuerdos/' + p.id, false, { capa: true });
+    toast('Recuerdo guardado aquí. Si quieres, añádele una foto o una nota.');
+  }
+  /* ---------- Mi ubicación ---------- */
+  let vigia = null, yoPos = null, yoPrimera = false;
+  const bYo = $('[data-m="yo"]');
+  function pararYo() {
+    if (vigia !== null) navigator.geolocation.clearWatch(vigia);
+    vigia = null;
+    yoPos = null;
+    mapa.quitarYo();
+    bYo.setAttribute('aria-pressed', 'false');
+    bYo.setAttribute('aria-label', 'Mi ubicación');
+  }
+  function abrirYo() {
+    if (!yoPos) return;
+    const x = { lat: +yoPos.lat.toFixed(5), lng: +yoPos.lng.toFixed(5), nombre: 'Estás aquí', txt: 'Precisión: unos ' + Math.max(5, Math.round(yoPos.acc)) + ' m' };
+    const d = nodoSitio(x, true);
+    mapa.ventana(x.lat, x.lng, d);
+    nombreSitio(x.lat, x.lng).then(n => {
+      if (!n || !d.isConnected) return;
+      x.nombre = n.nombre;
+      $('.pin-t', d).textContent = n.txt + ' · ' + x.txt;
+      $('.pin-n', d).textContent = 'Estás aquí: ' + n.nombre;
+    });
+  }
+  mapa.alTocarYo = abrirYo;
+  mapa.alYo = () => {
+    if (vigia !== null) { pararYo(); toast('Ubicación oculta'); return; }
+    if (!navigator.geolocation) { toast('Este navegador no puede darte tu ubicación'); return; }
+    bYo.setAttribute('aria-pressed', 'true');
+    bYo.setAttribute('aria-label', 'Ocultar mi ubicación');
+    yoPrimera = true;
+    toast('Buscando tu ubicación…', true);
+    vigia = navigator.geolocation.watchPosition(pos => {
+      const c = pos.coords;
+      yoPos = { lat: c.latitude, lng: c.longitude, acc: c.accuracy || 30 };
+      mapa.yo(yoPos.lat, yoPos.lng, yoPos.acc);
+      if (yoPrimera) {
+        yoPrimera = false;
+        toast('Estás aquí');
+        mapa.volar(yoPos.lat, yoPos.lng, Math.max(mapa.zoom(), 16));
+        setTimeout(abrirYo, menosMov.matches ? 0 : 900);
+      }
+    }, er => {
+      pararYo();
+      toast(er && er.code === 1 ? 'Sin permiso de ubicación. Actívalo en los ajustes del navegador (en el iPhone: Ajustes › Safari › Ubicación).' : 'No se pudo saber dónde estás. Inténtalo otra vez.');
+    }, { enableHighAccuracy: true, maximumAge: 10000, timeout: 20000 });
+  };
+  /* Nombre del sitio marcado con el dedo (si hay conexión) */
+  async function nombreSitio(lat, lng) {
+    try {
+      const j = await pedir('https://photon.komoot.io/reverse?lat=' + lat + '&lon=' + lng);
+      const p = ((j.features || [])[0] || {}).properties;
+      if (p) {
+        const partes = [p.name || [p.street, p.housenumber].filter(Boolean).join(' '), p.city, p.state, p.country].filter(Boolean);
+        if (partes.length) return { nombre: partes[0], txt: [...new Set(partes)].join(', ') };
+      }
+    } catch (e) { /* se prueba el otro */ }
+    try {
+      const x = await pedir('https://nominatim.openstreetmap.org/reverse?format=jsonv2&accept-language=es&lat=' + lat + '&lon=' + lng);
+      if (x && x.display_name) return { nombre: x.name || String(x.display_name).split(',')[0], txt: x.display_name };
+    } catch (e) { /* sin nombre */ }
+    return null;
+  }
+  mapa.alMarcar = async ll => {
+    if (eligiendo) return;
+    cerrarBusca();
+    cerrarMenu();
+    const x = { lat: +ll.lat.toFixed(5), lng: +ll.lng.toFixed(5), nombre: 'Sitio marcado', txt: '' };
+    x.txt = coord(x);
+    const d = ponerPin(x, true);
+    const n = await nombreSitio(x.lat, x.lng);
+    if (!n || !d.isConnected) return;
+    x.nombre = n.nombre;
+    x.txt = n.txt;
+    $('.pin-n', d).textContent = n.nombre;
+    $('.pin-t', d).textContent = n.txt;
+  };
+  /* Recuerdos: nuevo (eligiendo el sitio en el mapa) y ver uno */
+  function nuevoRecuerdo() {
+    if (modo !== 'mios') { ir('#privado', false, { capa: true }); return; }
+    if (!editando) { ponerEdicion(true); pintarPanel('inicio', null, true); }
+    elegir(mapa.centro(), pos => {
+      if (!pos) return;
+      posNueva = pos;
+      ir('#nuevo-punto/recuerdos', false, { capa: true });
+    });
+  }
+  function verRecuerdo(p) {
+    if (p.lat == null) { if (editando) ir('#punto/recuerdos/' + p.id, false, { capa: true }); else toast('Este recuerdo no tiene ubicación'); return; }
+    window.scrollTo({ top: 0, behavior: menosMov.matches ? 'auto' : 'smooth' });
+    mapa.volar(p.lat, p.lng, 16);
+    setTimeout(() => { ventanaPunto(rec, p); mapa.resaltar('recuerdos/' + p.id); }, menosMov.matches ? 0 : 850);
   }
 
   /* ---------- Menú del mapa: filtrar por viaje ---------- */
@@ -1019,23 +1189,31 @@
     const t = $('#ficha-' + id);
     if (t) { irFicha(t); mapaViaje(porId(id), true); }
   });
-  document.addEventListener('pointerdown', e => { if (!menu.hidden && !menu.contains(e.target) && !e.target.closest('[data-m="filtro"], [data-m="capa"]')) cerrarMenu(); });
+  /* Tocar otro botón (o fuera) cierra el buscador y los desplegables; al volver a abrir el buscador siguen sus resultados */
+  document.addEventListener('pointerdown', e => {
+    if (!menu.hidden && !menu.contains(e.target) && !e.target.closest('[data-m="filtro"], [data-m="capa"]')) cerrarMenu();
+    if (!busca.hidden && !busca.contains(e.target) && !e.target.closest('[data-m="buscar"]')) cerrarBusca();
+  });
 
   /* ---------- Portada: pestañas deslizables Viajes / Fotos ---------- */
   function pestanas() {
-    const nf = datos.reduce((s, v) => s + conFoto(v).length, 0), nv = nFav();
+    const nf = datos.reduce((s, v) => s + conFoto(v).length, 0), nr = rec.puntos.length;
     const t = (id, i, n, txt) => '<a class="tab" href="' + HASH[id] + '" data-tab="' + id + '"' + (tab === id ? ' aria-current="page"' : '') + '>' +
       '<span class="ci">' + ico(i) + '</span><b>' + n + '</b><small>' + txt + '</small></a>';
     return '<nav class="tabs" aria-label="Ver">' +
       t('viajes', 'pin', datos.length, datos.length === 1 ? 'viaje' : 'viajes') +
-      t('fotos', 'foto', nf, nf === 1 ? 'foto' : 'fotos') +
-      '<a class="tab tab-fav' + (soloFav ? ' on' : '') + '" href="#favoritos" data-tab="favs"' + (tab === 'favs' ? ' aria-current="page"' : '') +
-      ' aria-label="Favoritas: ' + plural(nv, 'foto', 'fotos') + (soloFav ? '. Modo corazón encendido' : '') + '">' +
-      '<span class="ci">' + ico('corazon') + '</span><b>' + nv + '</b></a><i class="tab-barra" aria-hidden="true"></i></nav>';
+      t('fotos', soloFav ? 'corazon' : 'foto', nf, nf === 1 ? 'foto' : 'fotos') + /* con el corazón encendido, su icono es el corazón */
+      t('rec', 'recuerdo', nr, nr === 1 ? 'recuerdo' : 'recuerdos') +
+      '<i class="tab-barra" aria-hidden="true"></i></nav>';
   }
   const BOLA = '<span class="cz-b" aria-hidden="true">' + ico('corazon') + '</span>'; /* corazón pequeño de las fotos favoritas */
-  let anioIni = 0;
+  const anioIni = { fotos: 0, rec: 0 }; /* primer año visible en cada fila de años */
   const corazon = (cls, attr, on, etiqueta) => '<button type="button" class="' + cls + ' cz" ' + attr + ' aria-pressed="' + !!on + '" aria-label="' + etiqueta + '">' + ico('corazon') + '</button>';
+  /* Vista de Fotos y Recuerdos: lista o mosaico (se recuerda) */
+  const vistas = { fotos: LS.leer('vista-fotos') === 'mosaico' ? 'mosaico' : 'lista', rec: LS.leer('vista-rec') === 'mosaico' ? 'mosaico' : 'lista' };
+  const cambioVista = (que, et) => '<div class="vista-sw" role="group" aria-label="' + et + '">' +
+    ['lista', 'mosaico'].map(k => '<button type="button" class="ib ib-s" data-vista="' + que + ':' + k + '" aria-pressed="' + (vistas[que] === k) + '" aria-label="Ver en ' + k + '">' + ico(k) + '</button>').join('') + '</div>';
+  const tituloCon = (t, extra) => '<div class="fi-top"><h2 class="ttl">' + t + '</h2><div class="fi-der">' + extra + '</div></div>';
 
   function adjuntoFila(v, a, j) {
     const img = a.tipo === 'img', ext = (a.f.split('.').pop() || '').toUpperCase();
@@ -1069,6 +1247,7 @@
       '<fieldset class="campo"><legend>Archivos adjuntos (billetes, reservas, mapas…)</legend><div class="f-adj">' + listaAdjuntos(v) + '</div>' +
       '<button type="button" class="pill" data-f="adjuntar">' + ico('clip') + 'Adjuntar imagen o PDF</button></fieldset>' +
       '<p class="error" role="alert" hidden></p>' +
+      (v.traer ? '<p class="nota">El viaje se crea con <b>' + esc(nombrePunto(v.traer.p)) + '</b> dentro.</p>' : '') +
       '<div class="h-pie">' + (v.nueva ? '' : '<button type="button" class="pill peligro" data-f="borrar"><span>Quitar viaje</span></button>') +
       '<button type="button" class="pill" data-f="cerrar">Cancelar</button><button type="submit" class="pill pri">Guardar</button></div></form>';
   }
@@ -1122,10 +1301,11 @@
     const anios = [...new Set(lista.map(anio).filter(Boolean))];
     if (filtro && anios.indexOf(filtro) < 0) filtro = '';
     const vis = visFotos();
-    let h = '<h2 class="ttl">Nuestras fotos</h2>';
+    let h = tituloCon('Nuestras fotos', lista.length ? cambioVista('fotos', 'Ver las fotos en lista o en mosaico') : '');
     if (!lista.length) return h + '<div class="vacio">' + ico('foto') + '<p>Aún no hay fotos.</p></div>';
-    h += filtrosAnios(anios);
+    h += filtrosAnios(anios, filtro, 'fotos');
     if (!vis.length) return h + '<div class="vacio">' + ico('corazon') + '<p>' + (soloFav ? 'No hay fotos favoritas en este año.' : 'No hay viajes en este año.') + '</p></div>';
+    if (vistas.fotos === 'mosaico') return h + mosaicoFotos();
     const num = numeros();
     let ultimo = null;
     h += '<ul class="lista">';
@@ -1137,45 +1317,80 @@
     return h + '</ul>';
   }
   /* Todos · corazón · años (con flechas y deslizando) */
-  function filtrosAnios(anios, enFavs) {
+  function filtrosAnios(anios, sel, que) {
     let h = '';
-    const nA = Math.min(panel.clientWidth || innerWidth, innerWidth) < 370 ? 1 : 2, k = anios.indexOf(filtro);
-    if (k >= 0 && k < anioIni) anioIni = k; else if (k >= anioIni + nA) anioIni = k - nA + 1;
-    anioIni = Math.max(0, Math.min(anioIni, anios.length - nA));
+    const nA = Math.min(panel.clientWidth || innerWidth, innerWidth) < 370 ? 1 : 2, k = anios.indexOf(sel);
+    let ini = anioIni[que];
+    if (k >= 0 && k < ini) ini = k; else if (k >= ini + nA) ini = k - nA + 1;
+    ini = anioIni[que] = Math.max(0, Math.min(ini, anios.length - nA));
     /* Las flechas seleccionan el año de al lado, de uno en uno: Todos › 2025 › 2024 › … */
     const flecha = (d, i, off, et) => '<button type="button" class="ib ib-s" data-anios="' + d + '"' + (off ? ' disabled' : '') + ' aria-label="' + et + '">' + ico(i) + '</button>';
-    /* En Fotos, «Todos» solo está marcado sin año ni corazón; en Favoritas no hace falta el corazón: ya son todas favoritas */
+    /* «Todos» solo está marcado sin año ni corazón */
     h += '<div class="anios" role="group" aria-label="Filtrar las fotos">' +
-      '<div class="anios-f"><button type="button" class="pill suave" data-anio="" aria-pressed="' + (!filtro && (enFavs || !soloFav)) + '">Todos</button>' +
-      (enFavs ? '' : corazon('pill', 'data-fav-modo', soloFav, 'Modo corazón: solo viajes con fotos favoritas')) + '</div>' +
-      '<div class="anios-a" aria-label="Años. Desliza o usa las flechas">' + flecha(-1, 'izq', !filtro, k > 0 ? 'Año ' + anios[k - 1] : 'Todos los años') +
-      anios.slice(anioIni, anioIni + nA).map(a => '<button type="button" class="pill" data-anio="' + a + '" aria-pressed="' + (filtro === a) + '">' + a + '</button>').join('') +
+      '<div class="anios-f"><button type="button" class="pill suave" data-anio="" aria-pressed="' + (!sel && !soloFav) + '">Todos</button>' +
+      corazon('czb', 'data-fav-modo', soloFav, 'Modo corazón: solo las favoritas') + '</div>' +
+      '<div class="anios-a" aria-label="Años. Desliza o usa las flechas">' + flecha(-1, 'izq', !sel, k > 0 ? 'Año ' + anios[k - 1] : 'Todos los años') +
+      anios.slice(ini, ini + nA).map(a => '<button type="button" class="pill" data-anio="' + a + '" aria-pressed="' + (sel === a) + '">' + a + '</button>').join('') +
       flecha(1, 'der', k >= anios.length - 1, k + 1 < anios.length ? 'Año ' + anios[k + 1] : 'No hay años anteriores') + '</div></div>';
     return h;
   }
-  /* Todas las fotos favoritas en cuadros, en el orden de los viajes */
-  const listaFavs = guarda => {
+  /* Mosaico: todas las fotos de los viajes visibles, en cuadros y por años; con el corazón, solo las favoritas */
+  const listaMosaico = guarda => {
     const fs = [];
-    ordenados().forEach(v => { if (!filtro || anio(v) === filtro) conFoto(v).forEach(p => { if (p.fav || p === guarda) fs.push({ v, p }); }); });
+    visFotos().forEach(v => conFoto(v).forEach(p => { if (!soloFav || p.fav || p === guarda) fs.push({ v, p }); }));
     return fs;
   };
-  function pintarFavs() {
-    const todas = nFav(), fs = listaFavs();
-    let h = '<h2 class="ttl">Fotos favoritas<small>' + fs.length + '</small></h2>';
-    if (!todas) return h + '<div class="vacio">' + ico('corazon') + '<p><b>Aún no hay favoritas.</b><br>Abre una foto y toca el corazón.</p></div>';
-    const anios = [...new Set(ordenados().map(anio).filter(Boolean))]; /* los mismos años que en Fotos */
-    if (anios.length > 1) h += filtrosAnios(anios, true);
-    if (!fs.length) return h + '<div class="vacio">' + ico('corazon') + '<p>No hay fotos favoritas en este año.</p></div>';
-    return h + '<div class="galeria">' + fs.map(o =>
-      '<button type="button" class="ft fav" data-v="' + o.v.id + '" data-p="' + o.p.id + '" data-sec="fav"><img src="' + src(o.p.f) + '" alt="' +
-      esc(nombrePunto(o.p) + ' · ' + o.v.titulo) + '" loading="lazy" decoding="async">' + BOLA + '</button>').join('') + '</div>';
+  const cuadro = (o, sec) => '<button type="button" class="ft' + (o.p.fav ? ' fav' : '') + '" data-v="' + o.v.id + '" data-p="' + o.p.id + '" data-sec="' + sec + '">' +
+    (o.p.f ? '<img src="' + src(o.p.f) + '" alt="' + esc(nombrePunto(o.p) + (o.v.recuerdos ? '' : ' · ' + o.v.titulo)) + '" loading="lazy" decoding="async">' + BOLA
+      : '<span class="ft-ph">' + ico('recuerdo') + '<small>' + esc(nombrePunto(o.p)) + '</small></span>') + '</button>';
+  function mosaicoFotos() {
+    const fs = listaMosaico();
+    if (!fs.length) return '<div class="vacio">' + ico('foto') + '<p>Aún no hay fotos en estos viajes.</p></div>';
+    let h = '', ultimo = null;
+    fs.forEach(o => {
+      const a = anio(o.v) || 'Sin fecha';
+      if (a !== ultimo) { h += (ultimo === null ? '' : '</div>') + (filtro ? '' : '<p class="anio-m" aria-hidden="true">' + a + '</p>') + '<div class="galeria">'; ultimo = a; }
+      h += cuadro(o, 'mosaico');
+    });
+    return h + '</div>';
+  }
+  /* ---------- Recuerdos: sitios sueltos, en lista o mosaico; con el corazón, solo los favoritos ---------- */
+  const fechaP = p => p.fecha || '';
+  const anioP = p => fechaP(p).slice(0, 4);
+  const aniosRec = () => [...new Set(rec.puntos.map(anioP).filter(Boolean))].sort().reverse();
+  const listaRec = guarda => rec.puntos.filter(p => p === guarda || ((!soloFav || p.fav) && (!filtroRec || anioP(p) === filtroRec)))
+    .slice().sort((a, b) => cmp(fechaP(b), fechaP(a))).map(p => ({ v: rec, p }));
+  function pintarRecuerdos() {
+    const todos = rec.puntos.length, rs = listaRec();
+    let h = tituloCon('Recuerdos', (todos ? cambioVista('rec', 'Ver los recuerdos en lista o en mosaico') : '') +
+      '<button type="button" class="pill fi-add" data-nuevo-rec><span class="vp" aria-hidden="true">' + ico('mas') + '</span>Nuevo</button>');
+    if (!todos) {
+      return h + '<div class="vacio">' + ico('recuerdo') + '<p><b>Sitios que no son un viaje:</b> una escapada, una cena, un paseo… ' +
+        'Mantén el dedo pulsado en el mapa (en el ordenador, clic derecho) o búscalo con la lupa y elige «Guardar como recuerdo».</p></div>';
+    }
+    const anios = aniosRec();
+    if (filtroRec && anios.indexOf(filtroRec) < 0) filtroRec = '';
+    h += filtrosAnios(anios, filtroRec, 'rec');
+    if (!rs.length) return h + '<div class="vacio">' + ico('corazon') + '<p>' + (soloFav ? 'No hay recuerdos favoritos' + (filtroRec ? ' en este año.' : '.') : 'No hay recuerdos en este año.') + '</p></div>';
+    /* Por años, como Fotos: en mosaico o en lista */
+    const cab = p => { const a = anioP(p) || 'Sin fecha'; if (filtroRec || a === cab.u) return ''; cab.u = a; return a; };
+    if (vistas.rec === 'mosaico') {
+      let m = '';
+      rs.forEach(o => { const a = cab(o.p); if (a) m += (m ? '</div>' : '') + '<p class="anio-m" aria-hidden="true">' + a + '</p><div class="galeria">'; else if (!m) m = '<div class="galeria">'; m += cuadro(o, 'rec'); });
+      return h + m + '</div>';
+    }
+    return h + '<ul class="lista">' + rs.map(({ p }) => { const a = cab(p); return (a ? '<li class="anio" aria-hidden="true">' + a + '</li>' : '') +
+      '<li><button type="button" class="viaje viaje-r' + (p.fav ? ' fav' : '') + '" data-rec="' + p.id + '">' +
+      (p.f ? '<img src="' + src(p.f) + '" alt="" loading="lazy">' : '<span class="ph">' + ico('recuerdo') + '</span>') +
+      '<span class="vi"><b>' + esc(nombrePunto(p)) + '</b><small>' + [fechaTxt(p.fecha), p.nombre && p.txt ? p.txt : '', p.lat == null ? 'Sin ubicación' : ''].filter(Boolean).map(esc).join(' · ') + '</small></span>' +
+      (p.fav ? BOLA : '') + '</button></li>'; }).join('') + '</ul>';
   }
   function pintarInicio() {
     viajeActual = null;
     panel.innerHTML = pestanas() + '<div class="pager">' +
       '<section class="pag" data-pag="viajes" aria-label="Viajes">' + pintarFichas() + '</section>' +
       '<section class="pag" data-pag="fotos" aria-label="Fotos">' + pintarFotos() + '</section>' +
-      '<section class="pag" data-pag="favs" aria-label="Favoritas">' + pintarFavs() + '</section></div>';
+      '<section class="pag" data-pag="rec" aria-label="Recuerdos">' + pintarRecuerdos() + '</section></div>';
     altoMapa();
     prepararPager();
     prepararCarrusel();
@@ -1194,9 +1409,14 @@
     panel.querySelectorAll('.tab').forEach(a => { if (a.dataset.tab === tab) a.setAttribute('aria-current', 'page'); else a.removeAttribute('aria-current'); });
     panel.querySelectorAll('.pag').forEach(p => p.setAttribute('aria-hidden', p.dataset.pag === tab ? 'false' : 'true'));
   }
+  /* La rayita bajo la pestaña sigue al dedo; las pestañas pueden tener anchos distintos */
   function moverBarra(r) {
-    const b = $('.tab-barra', panel);
-    if (b) b.style.transform = 'translateX(calc(' + Math.min(TABS.length - 1, Math.max(0, r)).toFixed(3) + ' * (100% + .5rem)))';
+    const b = $('.tab-barra', panel), ts = [...panel.querySelectorAll('.tabs .tab')];
+    if (!b || !ts.length) return;
+    r = Math.min(ts.length - 1, Math.max(0, r));
+    const i = Math.floor(r), f = r - i, a = ts[i], c = ts[Math.min(i + 1, ts.length - 1)];
+    b.style.width = (a.offsetWidth + (c.offsetWidth - a.offsetWidth) * f).toFixed(1) + 'px';
+    b.style.transform = 'translateX(' + (a.offsetLeft + (c.offsetLeft - a.offsetLeft) * f).toFixed(1) + 'px)';
   }
   function verTab(t, animar) {
     const pg = pager();
@@ -1236,7 +1456,7 @@
         altoPager();
         history.replaceState(history.state, '', HASH[t] === '#' ? location.pathname + location.search : HASH[t]);
         aplicado = location.hash;
-        if (t === 'favs' && !soloFav && nFav()) ponerFav(true); else mapaInicio();
+        mapaInicio();
       }, 90);
     }, { passive: true });
     pg.querySelectorAll('.pag').forEach(p => new ResizeObserver(altoPager).observe(p));
@@ -1254,10 +1474,7 @@
       const n = TABS.indexOf(tab) + (dx < 0 ? 1 : -1);
       if (TABS[n]) ir(HASH[TABS[n]], true);
     });
-    tabs.addEventListener('click', e => {
-      if (tabs.dataset.barrido) { e.preventDefault(); e.stopPropagation(); return; }
-      if (e.target.closest('[data-tab="favs"]') && tab === 'favs') { e.preventDefault(); e.stopPropagation(); ponerFav(!soloFav); }
-    }, true);
+    tabs.addEventListener('click', e => { if (tabs.dataset.barrido) { e.preventDefault(); e.stopPropagation(); } }, true);
   }
 
   /* Carrusel de fichas */
@@ -1363,7 +1580,7 @@
   }
 
   function pintarPanel(vista, v, forzar) {
-    const key = vista + ':' + (v ? v.id : '') + ':' + filtro + ':' + editando + ':' + modo;
+    const key = vista + ':' + (v ? v.id : '') + ':' + filtro + ':' + filtroRec + ':' + editando + ':' + modo;
     if (key === vistaKey && !forzar) return;
     const cambiaVista = vistaKey.split(':').slice(0, 2).join(':') !== key.split(':').slice(0, 2).join(':');
     const pista = $('.pista', panel), x = pista ? pista.scrollLeft : 0;
@@ -1401,13 +1618,18 @@
     const fv = r.tipo === 'ficha' ? (v || (fichaEd && fichaEd.id === r.id ? fichaEd : null)) : null;
     if (r.tipo === 'ficha') {
       /* Modificar se abre encima de lo que hubiera; si no se puede editar, se vuelve atrás */
-      if (!fv || !editando || modo !== 'mios') { ir(viajeActual ? '#v/' + viajeActual.id : HASH[tab], true, {}); return; }
+      if (!fv || fv.recuerdos || !editando || modo !== 'mios') { ir(viajeActual ? '#v/' + viajeActual.id : HASH[tab], true, {}); return; }
       if (!vistaKey) pintarPanel('inicio', null);
-    } else if (r.tipo === 'inicio' || r.tipo === 'fotos' || r.tipo === 'favoritos') {
-      const t = { inicio: 'viajes', fotos: 'fotos', favoritos: 'favs' }[r.tipo];
+    } else if (r.tipo === 'inicio' || r.tipo === 'fotos' || r.tipo === 'favoritos' || r.tipo === 'recuerdos') {
+      const t = { inicio: 'viajes', fotos: 'fotos', favoritos: 'fotos', recuerdos: 'rec' }[r.tipo];
       if (vistaKey.indexOf('inicio:') === 0 && pager()) verTab(t, true);
       else { if (viajeActual) fichaVer = viajeActual.id; tab = t; pintarPanel('inicio', null); }
-      if (t === 'favs' && !soloFav && nFav()) ponerFav(true);
+      if (r.tipo === 'favoritos' && !soloFav && nFav()) ponerFav(true); /* enlaces antiguos a #favoritos */
+    } else if (v && v.recuerdos) {
+      /* Fotos y puntos de Recuerdos: detrás, la pestaña Recuerdos */
+      if (r.tipo === 'v' && !r.p) { ir('#recuerdos', true, {}); return; }
+      if (vistaKey.indexOf('inicio:') === 0 && pager()) { if (tab !== 'rec') verTab('rec', false); }
+      else { tab = 'rec'; pintarPanel('inicio', null); }
     } else if (v) pintarPanel('viaje', v);
     else if (!vistaKey || r.tipo === 'v') pintarPanel('inicio', null);
     const pf = r.tipo === 'v' && v && r.p ? puntoDe(v, r.p) : null;
@@ -1465,7 +1687,7 @@
 
   /* ===================== Visor de fotos ===================== */
   const visor = $('#visor'), vImg = $('#visor-img');
-  let vV = null, vP = null, vFoco = null, toqueX = null, barrido = false, confirmar = null, secFav = false;
+  let vV = null, vP = null, vFoco = null, toqueX = null, barrido = false, confirmar = null, secModo = '';
   function abrirFoto(v, pid) { ir('#v/' + v.id + '/' + pid, false, { capa: true }); }
   function mostrarVisor(v, p) {
     if (visor.hidden && !eligiendo) {
@@ -1475,21 +1697,23 @@
       $('[data-v="cerrar"]', visor).focus();
     }
     vV = v; vP = p;
-    const sec = secuencia(), n = sec.findIndex(o => o.p === p);
-    if (n < 0) secFav = false;
-    const fs = conFoto(v), k = fs.indexOf(p);
+    if (v.recuerdos) secModo = 'rec';
+    let sec = secuencia(), n = sec.findIndex(o => o.p === p);
+    if (n < 0) { secModo = ''; sec = secuencia(); n = sec.findIndex(o => o.p === p); }
     zoomPoner(1);
     vImg.src = src(p.f);
     vImg.alt = nombrePunto(p) + ' · ' + v.titulo;
-    $('#visor-t').textContent = secFav ? 'Favoritas · ' + (n + 1) + ' / ' + sec.length + ' · ' + v.titulo : v.titulo + ' · ' + (k + 1) + ' / ' + fs.length;
+    $('#visor-t').textContent = (secModo === 'rec' ? 'Recuerdos' : secModo === 'mosaico' ? 'Fotos' : v.titulo) + ' · ' + (n + 1) + ' / ' + sec.length +
+      (secModo === 'mosaico' ? ' · ' + v.titulo : '');
     $('#visor-nombre').textContent = p.nombre || '';
     $('#visor-fecha').textContent = fechaTxt(p.fecha);
     $('#visor-txt').textContent = p.txt || '';
     $('[data-v="fav"]', visor).setAttribute('aria-pressed', !!p.fav);
     $('[data-v="mapa"]', visor).hidden = p.lat == null;
-    const m = secFav ? n : k, tot = secFav ? sec.length : fs.length;
-    $('[data-v="ant"]', visor).hidden = m <= 0;
-    $('[data-v="sig"]', visor).hidden = m >= tot - 1;
+    $('[data-v="ant"]', visor).hidden = n <= 0;
+    $('[data-v="sig"]', visor).hidden = n >= sec.length - 1;
+    $('[data-v="portada"]', visor).hidden = !!v.recuerdos; /* un recuerdo no tiene portada; se borra desde «Editar» */
+    $('[data-v="quitar"]', visor).hidden = !!v.recuerdos;
     $('[data-v="colocar"] span', visor).textContent = p.lat == null ? 'Colocar en el mapa' : 'Mover en el mapa';
     $('[data-v="portada"] span', visor).textContent = portada(v) === p.f ? 'Es la portada' : 'Usar de portada';
     confirmar = null;
@@ -1497,7 +1721,7 @@
     mapa.resaltar(p.id);
   }
   function ocultarVisor() {
-    secFav = false;
+    secModo = '';
     if (visor.hidden) return;
     visor.hidden = true;
     zoomPoner(1);
@@ -1506,8 +1730,10 @@
     mapa.resaltar(null);
     if (vFoco && vFoco.focus) vFoco.focus();
   }
-  /* Las fotos por las que se pasa en el visor: las del viaje, o todas las favoritas si se abrió desde Favoritas */
-  const secuencia = () => secFav ? listaFavs(vP) : conFoto(vV).map(p => ({ v: vV, p }));
+  /* Las fotos por las que se pasa en el visor: las del viaje, las del mosaico de Fotos o las de Recuerdos */
+  const secuencia = () => secModo === 'mosaico' ? listaMosaico(vP) : secModo === 'rec' ? listaRec(vP).filter(o => o.p.f) : conFoto(vV).map(p => ({ v: vV, p }));
+  const baseVisor = () => vV && vV.recuerdos ? '#recuerdos' : '#v/' + vV.id;
+  const repintar = v => { if (v.recuerdos) pintarPanel('inicio', null, true); else pintarPanel('viaje', v, true); };
   function cambiarFoto(d) {
     const fs = secuencia(), n = fs.findIndex(o => o.p === vP) + d;
     if (n < 0 || n >= fs.length) return;
@@ -1516,12 +1742,12 @@
   visor.addEventListener('click', e => {
     const b = e.target.closest('[data-v]');
     if (!b) {
-      if (e.target.classList.contains('v-escena') && !barrido) cerrarCapa('#v/' + vV.id);
+      if (e.target.classList.contains('v-escena') && !barrido) cerrarCapa(baseVisor());
       barrido = false;
       return;
     }
     const a = b.dataset.v, p = vP;
-    if (a === 'cerrar') cerrarCapa('#v/' + vV.id);
+    if (a === 'cerrar') cerrarCapa(baseVisor());
     else if (a === 'zoom') zoomPoner(zS > 1 ? 1 : 2.5);
     else if (a === 'fav') {
       if (p.fav) delete p.fav; else p.fav = true;
@@ -1533,7 +1759,7 @@
     else if (a === 'ant') cambiarFoto(-1);
     else if (a === 'sig') cambiarFoto(1);
     else if (a === 'mapa') {
-      cerrarCapa('#v/' + vV.id);
+      cerrarCapa(baseVisor());
       window.scrollTo({ top: 0, behavior: menosMov.matches ? 'auto' : 'smooth' });
       mapa.volar(p.lat, p.lng, 17);
       setTimeout(() => mapa.resaltar(p.id), 900);
@@ -1544,9 +1770,9 @@
       elegir(p.lat != null ? p : posicion(v), pos => {
         if (!pos) return;
         p.lat = pos.lat; p.lng = pos.lng;
-        completarViaje(v);
+        if (!v.recuerdos) completarViaje(v);
         guardar();
-        pintarPanel('viaje', v, true);
+        repintar(v);
         mostrarVisor(v, p);
         toast('Foto colocada en el mapa');
       });
@@ -1626,7 +1852,7 @@
 
   /* ===================== Hoja: punto, privado y copia ===================== */
   const hoja = $('#hoja'), caja = $('#hoja-caja');
-  let hFoco = null, hModo = '', ed = null, posNueva = null;
+  let hFoco = null, hModo = '', ed = null, posNueva = null, fechaNueva = '';
   function mostrarHoja(html, m) {
     if (hoja.hidden) { hFoco = document.activeElement; }
     hModo = m;
@@ -1648,7 +1874,8 @@
     if (visor.hidden) document.documentElement.classList.remove('bloq');
     if (hFoco && hFoco.focus) hFoco.focus();
   }
-  const baseHoja = () => (ed ? '#v/' + ed.v.id : (viajeActual ? '#v/' + viajeActual.id : HASH[tab]));
+  const baseDe = v => v.recuerdos ? '#recuerdos' : '#v/' + v.id;
+  const baseHoja = () => (ed ? baseDe(ed.v) : (viajeActual ? '#v/' + viajeActual.id : HASH[tab]));
   const cabecera = t => '<div class="h-cab"><h2 id="hoja-t" class="ttl">' + t + '</h2>' +
     '<button type="button" class="ib" data-f="cerrar" aria-label="Cerrar">' + ico('x') + '</button></div>';
   const error = (cont, msg) => { const e = $('.error', cont); e.textContent = msg; e.hidden = false; };
@@ -1666,11 +1893,19 @@
     if (nuevo) {
       if (!adjuntosDe(v).length) v.id = idLibre(slug(d.titulo) + (d.desde ? '-' + d.desde.slice(0, 4) : ''));
       delete v.nueva;
+      if (v.traer) { /* el punto (o recuerdo) con el que se creó el viaje */
+        const { v: o, p } = v.traer;
+        delete v.traer;
+        if (o) { o.puntos.splice(o.puntos.indexOf(p), 1); if (p.f && o.portada === p.f) delete o.portada; }
+        p.id = 'p1';
+        v.puntos = [p];
+      }
       datos.push(v);
     }
     ['titulo', 'lugar', 'itinerario', 'desde', 'hasta', 'texto'].forEach(c => { if (d[c]) v[c] = d[c]; else if (c !== 'titulo') delete v[c]; });
     if (d.enlaces.length) v.enlaces = d.enlaces; else delete v.enlaces;
     if (form.dataset.lat) { v.lat = +form.dataset.lat; v.lng = +form.dataset.lng; } else { delete v.lat; delete v.lng; }
+    if (nuevo) completarViaje(v);
     guardar();
     const desde = viajeActual;
     cerrarCapa(baseHoja());
@@ -1743,17 +1978,19 @@
   }
   function abrirPunto(v, p) {
     if (hModo === 'punto' && ed && ed.v === v && ed.p === p) return;
-    if (!editando || (!p && !posNueva)) { ir('#v/' + v.id, true, {}); return; }
+    if (!editando || (!p && !posNueva)) { ir(baseDe(v), true, {}); return; }
     ed = { v, p, pos: p ? (p.lat != null ? { lat: p.lat, lng: p.lng } : null) : posNueva, f: p ? p.f || null : null, nueva: null, fechaFoto: null };
     posNueva = null;
-    const x = p || { nombre: nombreNuevo };
+    const x = p || { nombre: nombreNuevo, fecha: fechaNueva };
     nombreNuevo = '';
-    const otros = p ? ordenados().filter(o => !o.nueva) : [];
+    fechaNueva = '';
+    const otros = p ? [rec].concat(ordenados()) : [], esRec = !!v.recuerdos;
     mostrarHoja(
-      '<form id="form-punto" novalidate>' + cabecera(p ? 'Editar punto' : 'Nuevo punto') +
-      (otros.length > 1 ? '<label class="campo">Viaje (cámbialo para pasar el punto a otro viaje)<select id="f-viaje">' +
-        otros.map(o => '<option value="' + esc(o.id) + '"' + (o === v ? ' selected' : '') + '>' + esc(o.titulo) + '</option>').join('') + '</select></label>'
-        : '<p class="nota">Viaje: <b>' + esc(v.titulo) + '</b></p>') +
+      '<form id="form-punto" novalidate>' + cabecera(esRec ? (p ? 'Editar recuerdo' : 'Nuevo recuerdo') : (p ? 'Editar punto' : 'Nuevo punto')) +
+      (otros.length ? '<label class="campo">Dónde se guarda (cámbialo para pasarlo a un viaje o a Recuerdos)<select id="f-viaje">' +
+        otros.map(o => '<option value="' + esc(o.id) + '"' + (o === v ? ' selected' : '') + '>' + esc(o.recuerdos ? 'Recuerdos (sin viaje)' : o.titulo) + '</option>').join('') +
+        '<option value="__nuevo">Crear un viaje nuevo con él…</option></select></label>'
+        : '<p class="nota">' + (esRec ? 'Se guarda en <b>Recuerdos</b>: un sitio suelto, sin viaje.' : 'Viaje: <b>' + esc(v.titulo) + '</b>') + '</p>') +
       '<label class="campo">Nombre<input id="f-nombre" type="text" maxlength="80" value="' + esc(x.nombre) + '" placeholder="Por ejemplo: Mirador de Santa Luzia"></label>' +
       '<label class="campo">Fecha<input id="f-pfecha" type="date" value="' + esc((x.fecha || '').slice(0, 10)) + '"></label>' +
       '<label class="campo">Comentario<textarea id="f-ptxt" rows="2" maxlength="500" placeholder="Qué pasó aquí">' + esc(x.txt) + '</textarea></label>' +
@@ -1792,21 +2029,29 @@
     if (fecha) p.fecha = fecha.length === 10 && prevFecha.slice(0, 10) === fecha ? prevFecha : fecha; else delete p.fecha;
     if (ed.pos) { p.lat = ed.pos.lat; p.lng = ed.pos.lng; } else { delete p.lat; delete p.lng; }
     ordenarPuntos(v);
-    completarViaje(v);
+    if (!v.recuerdos) completarViaje(v);
     const nuevo = !ed.p, sel = $('#f-viaje', caja), dest = sel ? porId(sel.value) : null;
-    if (dest && dest !== v) { /* pasar el punto a otro viaje */
+    if (sel && sel.value === '__nuevo') { /* crear un viaje nuevo con este punto: se pasa al guardar el viaje */
+      guardar();
+      ed = null;
+      fichaEd = { id: idLibre('nuevo-viaje'), titulo: 'Nuevo viaje', puntos: [], nueva: true, traer: { v, p } };
+      if (p.lat != null) { fichaEd.lat = p.lat; fichaEd.lng = p.lng; }
+      ir('#ficha/' + fichaEd.id, true, { capa: true });
+      return;
+    }
+    if (dest && dest !== v) { /* pasar el punto a otro viaje (o a Recuerdos) */
       v.puntos.splice(v.puntos.indexOf(p), 1);
       if (p.f && v.portada === p.f) delete v.portada;
       dest.puntos = puntosDe(dest);
       p.id = nuevoId(dest);
       dest.puntos.push(p);
       ordenarPuntos(dest);
-      completarViaje(dest);
+      if (!dest.recuerdos) completarViaje(dest);
     }
     guardar();
-    cerrarCapa('#v/' + v.id);
-    pintarPanel('viaje', v, true);
-    toast(dest && dest !== v ? 'Punto pasado a «' + dest.titulo + '»' : nuevo ? 'Punto creado' : 'Punto guardado');
+    cerrarCapa(baseDe(v));
+    repintar(v);
+    toast(dest && dest !== v ? 'Pasado a «' + dest.titulo + '»' : v.recuerdos ? (nuevo ? 'Recuerdo guardado' : 'Recuerdo actualizado') : nuevo ? 'Punto creado' : 'Punto guardado');
   }
 
   hoja.addEventListener('dragover', e => { if (hModo === 'privado') e.preventDefault(); });
@@ -1866,9 +2111,9 @@
       if (p.f && v.portada === p.f) delete v.portada;
       soltar(p.f);
       guardar();
-      cerrarCapa('#v/' + v.id);
-      pintarPanel('viaje', v, true);
-      toast('Punto borrado');
+      cerrarCapa(baseDe(v));
+      repintar(v);
+      toast(v.recuerdos ? 'Recuerdo borrado' : 'Punto borrado');
     }
   });
   document.addEventListener('click', e => {
@@ -1957,13 +2202,31 @@
     if (fl) { moverAnios(+fl.dataset.anios, true); return; }
     const p = t.closest('[data-anio]');
     if (p) {
-      filtro = p.dataset.anio;
-      if (!filtro && soloFav && !p.closest('[data-pag="favs"]')) ponerFav(false); /* «Todos» de Fotos: todas las fotos, sin corazón */
+      const a = p.dataset.anio;
+      if (p.closest('[data-pag="rec"]')) filtroRec = a; else filtro = a;
+      if (!a && soloFav) ponerFav(false); /* «Todos»: todo, sin corazón */
       else pintarPanel('inicio', null);
       return;
     }
     const ft = t.closest('.ft');
-    if (ft) { secFav = ft.dataset.sec === 'fav'; abrirFoto(ft.dataset.v ? porId(ft.dataset.v) : viajeActual, ft.dataset.p); return; }
+    if (ft) {
+      const v = ft.dataset.v ? porId(ft.dataset.v) : viajeActual, p = puntoDe(v, ft.dataset.p);
+      if (v.recuerdos && !p.f) { verRecuerdo(p); return; }
+      secModo = ft.dataset.sec === 'mosaico' || ft.dataset.sec === 'rec' ? ft.dataset.sec : '';
+      abrirFoto(v, p.id);
+      return;
+    }
+    const vs = t.closest('[data-vista]');
+    if (vs) {
+      const [que, k] = vs.dataset.vista.split(':');
+      vistas[que] = k;
+      LS.poner(que === 'rec' ? 'vista-rec' : 'vista-fotos', k);
+      pintarPanel('inicio', null, true);
+      return;
+    }
+    const rr = t.closest('[data-rec]');
+    if (rr) { const p = puntoDe(rec, rr.dataset.rec); if (p.f) { secModo = 'rec'; abrirFoto(rec, p.id); } else verRecuerdo(p); return; }
+    if (t.closest('[data-nuevo-rec]')) { nuevoRecuerdo(); return; }
     const paso = t.closest('[data-paso]');
     if (paso) {
       const fs = [...$('.pista', panel).children], k = fs.indexOf(fichaActual()) + (+paso.dataset.paso);
@@ -2002,10 +2265,11 @@
   });
   /* Años de Fotos: flechas o deslizar el dedo sobre ellos */
   function moverAnios(d, foco) {
-    const anios = [...new Set(ordenados().map(anio).filter(Boolean))];
-    const n = (filtro ? anios.indexOf(filtro) : -1) + d;
+    const enRec = tab === 'rec', sel = enRec ? filtroRec : filtro;
+    const anios = enRec ? aniosRec() : [...new Set(ordenados().map(anio).filter(Boolean))];
+    const n = (sel ? anios.indexOf(sel) : -1) + d;
     if (n < -1 || n >= anios.length) return;
-    filtro = n < 0 ? '' : anios[n];
+    if (enRec) filtroRec = n < 0 ? '' : anios[n]; else filtro = n < 0 ? '' : anios[n];
     pintarPanel('inicio', null);
     const pag = $('[data-pag="' + tab + '"]', panel) || panel, fila = $('.anios-a', pag);
     if (fila && !menosMov.matches) fila.classList.add(d > 0 ? 'entra-d' : 'entra-i');
@@ -2158,7 +2422,7 @@
       if (!busca.hidden) { cerrarBusca(true); return; }
       if (eligiendo) { salirElegir(null); return; }
       if (!hoja.hidden) cerrarCapa(baseHoja());
-      else if (!visor.hidden) cerrarCapa('#v/' + vV.id);
+      else if (!visor.hidden) cerrarCapa(baseVisor());
       else if (full) ponerFull(false);
     } else if (!visor.hidden && hoja.hidden) {
       if (e.key === 'ArrowLeft') cambiarFoto(-1);
@@ -2176,7 +2440,7 @@
     const lista = (await IDB.todo()) || [];
     hayMios = lista.some(x => x[0] === CLAVE_DATOS);
     if (hayMios && LS.leer('modo') !== 'ejemplos') {
-      try { datos = JSON.parse(lista.find(x => x[0] === CLAVE_DATOS)[1]); } catch (e) { datos = []; }
+      try { datos = separar(JSON.parse(lista.find(x => x[0] === CLAVE_DATOS)[1])); } catch (e) { datos = separar([]); }
       lista.forEach(([k, b]) => { if (k !== CLAVE_DATOS) arch.set(k, { blob: b, url: URL.createObjectURL(b) }); });
       modo = 'mios';
       persistir();

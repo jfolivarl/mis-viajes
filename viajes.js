@@ -1,5 +1,6 @@
 /* Mis viajes · VIAJES DE EJEMPLO (cara pública).
-   Tus viajes reales no van aquí: se guardan solo en tu dispositivo y en tu copia de seguridad. */
+   Tus viajes reales no van aquí: se guardan solo en tu dispositivo y en tu copia de seguridad.
+   El último elemento («recuerdos: true») guarda los recuerdos de ejemplo: sitios sueltos que no son un viaje. */
 window.VIAJES = [
  {
   "id": "mogan-2025",
@@ -160,5 +161,21 @@ window.VIAJES = [
   ],
   "lat": 5.0688,
   "lng": -75.5174
+ },
+ {
+  "id": "recuerdos",
+  "recuerdos": true,
+  "titulo": "Recuerdos",
+  "puntos": [
+   {
+    "id": "p1",
+    "f": "burdeos-01.jpg",
+    "fecha": "2025-12-20T19:10",
+    "lat": 44.8379,
+    "lng": -0.5736,
+    "nombre": "Vino caliente en Burdeos",
+    "txt": "Un vin chaud para entrar en calor una tarde de invierno, en un bar de la rue Sainte-Catherine, la calle peatonal que cruza el casco antiguo hasta la Place de la Comédie."
+   }
+  ]
  }
 ];

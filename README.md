@@ -50,7 +50,7 @@ Si se borra la app o los datos del navegador, lo guardado se pierde: la copia es
 
 ## Al actualizar la app
 
-En `index.html`, los archivos llevan un número de versión (`main.js?v=20261112g`). Cada vez que se cambie `main.js`, `style.css` o `viajes.js`, hay que cambiar ese número en `index.html` y subirlo también: así los móviles cargan la versión nueva en vez de la guardada.
+En `index.html`, los archivos llevan un número de versión (`main.js?v=20261113d`). Cada vez que se cambie `main.js`, `style.css` o `viajes.js`, hay que cambiar ese número en `index.html` y subirlo también: así los móviles cargan la versión nueva en vez de la guardada.
 
 ## Cambiar los ejemplos
 

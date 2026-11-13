@@ -84,10 +84,10 @@ img{max-width:100%}
 .tab small{color:var(--muted);font-size:.85rem}
 .tab[aria-current="page"]{border-color:var(--acento);box-shadow:inset 0 0 0 1px var(--acento)}
 .tab[aria-current="page"] .ci{background:var(--acento);border-color:var(--acento);color:#fff}
-.tab-fav{font:inherit;cursor:pointer}
-.tab-fav[aria-pressed="true"]{border-color:var(--acento);background:var(--acento)}
-.tab-fav[aria-pressed="true"] b{color:#fff}
-.tab-fav[aria-pressed="true"] .ci{border-color:#fff;color:#fff}
+.tab-fav.on{border-color:var(--acento);background:var(--acento)}
+.tab-fav.on b{color:#fff}
+.tab-fav.on .ci{border-color:#fff;color:#fff}
+.tab-fav.on .ic{fill:currentColor}
 .ci{display:grid;place-items:center;flex:none;width:30px;height:30px;border-radius:50%;border:1px solid var(--oro);color:var(--tturq)}
 .ci .ic{width:17px;height:17px}
 @media (max-width:379px){
@@ -269,13 +269,11 @@ img{max-width:100%}
 .m-ctrl{position:absolute;right:10px;top:10px;z-index:1000;display:flex;flex-direction:column;align-items:flex-end;gap:6px}
 .m-ctrl button{position:relative;display:grid;place-items:center;width:38px;height:38px;border-radius:50%;border:1px solid var(--line);background:var(--card);color:var(--titulo);cursor:pointer;box-shadow:var(--sombra);transition:width .2s,height .2s,background .2s}
 .m-ctrl button[aria-expanded="true"],.m-ctrl button[aria-pressed="true"],.m-ctrl button.pulso{background:var(--acento);border-color:var(--acento);color:#fff}
-/* Activos: búsqueda, pantalla completa y filtro crecen igual; el corazón, algo más.
+/* Activos: búsqueda, pantalla completa, filtro y corazón crecen igual.
    Capas, acercar, alejar y el planeta solo se iluminan. */
-.m-ctrl [data-m="buscar"][aria-expanded="true"],.m-ctrl [data-m="full"][aria-pressed="true"],.m-ctrl [data-m="filtro"][aria-pressed="true"]{width:44px;height:44px}
-.m-ctrl [data-m="buscar"][aria-expanded="true"] .ic,.m-ctrl [data-m="full"][aria-pressed="true"] .ic,.m-ctrl [data-m="filtro"][aria-pressed="true"] .ic{width:22px;height:22px}
+.m-ctrl [data-m="buscar"][aria-expanded="true"],.m-ctrl [data-m="full"][aria-pressed="true"],.m-ctrl [data-m="filtro"][aria-pressed="true"],.m-ctrl [data-m="fav"][aria-pressed="true"]{width:44px;height:44px}
+.m-ctrl [data-m="buscar"][aria-expanded="true"] .ic,.m-ctrl [data-m="full"][aria-pressed="true"] .ic,.m-ctrl [data-m="filtro"][aria-pressed="true"] .ic,.m-ctrl [data-m="fav"][aria-pressed="true"] .ic{width:22px;height:22px}
 .m-ctrl [data-m="filtro"][aria-pressed="true"] .ic{fill:currentColor}
-.m-ctrl [data-m="fav"][aria-pressed="true"]{width:50px;height:50px}
-.m-ctrl [data-m="fav"][aria-pressed="true"] .ic{width:25px;height:25px}
 /* Muestras de color de los mapas base */
 .sw{display:inline-grid;place-items:center;flex:none;width:22px;height:22px;border-radius:50%;border:1px solid #fff}
 .sw i{width:7px;height:7px;border-radius:50%;background:transparent}

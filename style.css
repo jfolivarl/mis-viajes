@@ -257,7 +257,7 @@ img{max-width:100%}
 .mapa{width:100%;height:100%;isolation:isolate}
 .leaflet-container{background:var(--mar);font:inherit;color:var(--texto)}
 .leaflet-container a{color:var(--tturq)}
-.leaflet-container .leaflet-control-attribution{background:var(--card);color:var(--muted);font-size:.68rem;border-top-left-radius:6px}
+.leaflet-container .leaflet-control-attribution{background:var(--card);color:var(--muted);font-size:.6rem;line-height:1.3;border-top-left-radius:6px;max-width:calc(100% - 124px);text-align:right} /* deja libres escala y norte, abajo a la izquierda */
 .leaflet-control-scale-line{padding:0 2px;border:0;border-bottom:1px solid #6b7785;background:none;color:#6b7785;font-size:.68rem;line-height:1.25;text-shadow:none}
 .m-norte{color:#6b7785}
 .base-osc .m-norte{color:#aab6c2}

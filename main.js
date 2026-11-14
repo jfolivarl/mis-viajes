@@ -254,7 +254,7 @@
   function crearMapa(el) {
     const map = L.map(el, { zoomControl: false, worldCopyJump: true, minZoom: 2, maxZoom: 19, zoomSnap: 0.5, tapTolerance: 15 });
     map.setView([25, -20], 2);
-    map.attributionControl.setPrefix('<a href="https://leafletjs.com" target="_blank" rel="noopener">Leaflet</a>');
+    map.attributionControl.setPrefix('Autor: <a href="https://github.com/jfolivarl" target="_blank" rel="noopener"><b>Juan Felipe Olivar Londoño</b></a> · <a href="https://leafletjs.com" target="_blank" rel="noopener">Leaflet</a>');
     const OSM = '© <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">OpenStreetMap</a>';
     /* Fondos grises de Esri (Canvas): sin clave, con su capa de nombres encima */
     const ESRI = 'https://server.arcgisonline.com/ArcGIS/rest/services/';
@@ -299,8 +299,8 @@
       '<button type="button" data-m="mas" aria-label="Acercar">' + ico('mas') + '</button>' +
       '<button type="button" data-m="menos" aria-label="Alejar">' + ico('menos') + '</button>' +
       '<button type="button" data-m="todo" aria-label="Ver todo">' + ico('mundo') + '</button>' +
-      '<button type="button" class="m-bloque" data-m="yo" aria-label="Mi ubicación" aria-pressed="false">' + ico('yo') + '</button>' +
-      '<button type="button" data-m="full" aria-label="Mapa a pantalla completa" aria-pressed="false">' + ico('full') + '</button>';
+      '<button type="button" class="m-bloque" data-m="full" aria-label="Mapa a pantalla completa" aria-pressed="false">' + ico('full') + '</button>' +
+      '<button type="button" data-m="yo" aria-label="Mi ubicación" aria-pressed="false">' + ico('yo') + '</button>';
     /* Derecha: buscar y capas; en un segundo bloque, qué viajes se ven (Ver viajes y corazón) */
     const ctrl = L.DomUtil.create('div', 'm-ctrl', el);
     ctrl.innerHTML =

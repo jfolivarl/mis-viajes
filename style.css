@@ -300,10 +300,12 @@ img{max-width:100%}
 .m-ctrl [data-m="filtro"][aria-pressed="true"] .ic{fill:currentColor}
 /* «Ver viajes»: avión; con un viaje en el mapa, embudo y número con su aro blanco */
 .m-bloque{margin-top:12px} /* separa los bloques de cada columna */
+.m-ctrl [data-m="yo"]{margin-top:3px} /* medio espacio más entre «pantalla completa» y «mi ubicación» */
 @media (max-width:379px){ /* mapa bajito: botones algo menores para que no tapen el norte ni la escala */
   .m-ctrl{gap:4px}
   .m-ctrl button{width:34px;height:34px}
   .m-bloque{margin-top:8px}
+  .m-ctrl [data-m="yo"]{margin-top:2px}
 }
 .m-num{position:absolute;right:-4px;bottom:-4px;display:grid;place-items:center;min-width:19px;height:19px;padding:0 4px;border-radius:999px;border:1.5px solid #fff;background:var(--surface);color:var(--titulo);font-size:.68rem;font-weight:700;line-height:1}
 /* Muestras de color de los mapas base */

@@ -202,12 +202,14 @@
   const puntosDe = v => v.puntos || [];
   const adjuntosDe = v => v.adjuntos || [];
   const conFoto = v => puntosDe(v).filter(p => p.f);
+  /* Todas las fotos de un punto: la principal (f) y, en un recuerdo, las extra (fs) */
+  const fotosDe = p => [p.f, ...(p.fs || [])].filter(Boolean);
   const ubicados = v => puntosDe(v).filter(p => p.lat != null);
   const puntoDe = (v, id) => puntosDe(v).find(p => p.id === id);
   const src = f => arch.has(f) ? arch.get(f).url : encodeURI(f);
   /* Foto pequeña para mapa, fichas y cuadros: la miniatura propia, o la «-m.jpg» de los ejemplos */
   const EJ_FOTOS = new Set();
-  (window.VIAJES || []).forEach(v => (v.puntos || []).forEach(p => { if (p.f) EJ_FOTOS.add(p.f); }));
+  (window.VIAJES || []).forEach(v => (v.puntos || []).forEach(p => fotosDe(p).forEach(f => EJ_FOTOS.add(f))));
   const peq = f => arch.has(f) ? (arch.get(f).mini || arch.get(f).url) : EJ_FOTOS.has(f) ? encodeURI(f.replace(/\.jpg$/i, '-m.jpg')) : encodeURI(f);
   const nombrePunto = p => p.nombre || p.txt || (p.f ? 'Foto' : 'Punto');
   function portada(v) {
@@ -225,7 +227,7 @@
   function referenciadas() {
     const s = new Set();
     conRecuerdos().forEach(v => {
-      puntosDe(v).forEach(p => { if (p.f) s.add(p.f); });
+      puntosDe(v).forEach(p => fotosDe(p).forEach(f => s.add(f)));
       adjuntosDe(v).forEach(a => s.add(a.f));
     });
     return s;
@@ -832,12 +834,13 @@
     };
   }
 
+  /* Un recuerdo se ve siempre con su icono; si tiene varias fotos, el número de fotos (o de recuerdos, si hay varios en el mismo sitio) */
   function marcaRecuerdo(items) {
-    const p = items[0].p, n = items.length;
+    const p = items[0].p, n = items.length, k = fotosDe(p).length;
     return {
-      clase: 'm-r', tam: p.f ? 38 : 32,
+      clase: 'm-r', tam: 32,
       titulo: n > 1 ? n + ' recuerdos aquí' : 'Recuerdo: ' + nombrePunto(p),
-      html: (p.f ? '<img src="' + peq(p.f) + '" alt="">' : ico('recuerdo')) + (n > 1 ? '<span class="m-n">' + n + '</span>' : '')
+      html: ico('recuerdo') + (n > 1 ? '<span class="m-n">' + n + '</span>' : k > 1 ? '<span class="m-n">' + k + '</span>' : '')
     };
   }
   const puntosRec = () => ubicados(rec).filter(o => (!soloFav || o.fav) && (tab !== 'rec' || !filtroRec || anioP(o) === filtroRec)).map(o => ({ id: 'recuerdos/' + o.id, lat: o.lat, lng: o.lng, v: rec, p: o }));
@@ -1755,6 +1758,7 @@
     if (n < 0) { secModo = ''; sec = secuencia(); n = sec.findIndex(o => o.p === p); }
     zoomPoner(1);
     vImg.src = src(p.f);
+    pintarFotosExtra(v, p);
     vImg.alt = nombrePunto(p) + ' · ' + v.titulo;
     $('#visor-t').textContent = (secModo === 'rec' ? 'Recuerdos' : secModo === 'mosaico' ? 'Fotos' : v.titulo) + ' · ' + (n + 1) + ' / ' + sec.length +
       (secModo === 'mosaico' ? ' · ' + v.titulo : '');
@@ -1773,6 +1777,20 @@
     $('[data-v="quitar"] span', visor).textContent = 'Quitar foto';
     mapa.resaltar(p.id);
   }
+  /* En un recuerdo con varias fotos, tira de miniaturas bajo el texto para ver cada una grande */
+  const vMas = $('#visor-mas');
+  function pintarFotosExtra(v, p) {
+    const fs = v.recuerdos ? fotosDe(p) : [];
+    vMas.hidden = fs.length < 2;
+    vMas.innerHTML = fs.map((f, i) => '<button type="button" data-vfoto="' + esc(f) + '"' + (i ? '' : ' aria-current="true"') + ' aria-label="Foto ' + (i + 1) + ' de ' + fs.length + '"><img src="' + peq(f) + '" alt="" loading="lazy"></button>').join('');
+  }
+  vMas.addEventListener('click', e => {
+    const b = e.target.closest('[data-vfoto]');
+    if (!b) return;
+    vImg.src = src(b.dataset.vfoto);
+    zoomPoner(1);
+    vMas.querySelectorAll('[data-vfoto]').forEach(x => x.toggleAttribute('aria-current', x === b));
+  });
   function ocultarVisor() {
     secModo = '';
     if (visor.hidden) return;
@@ -2023,6 +2041,15 @@
     mostrarHoja(h, 'privado');
   }
 
+  /* Fotos de un recuerdo en el formulario: las guardadas y las nuevas, cada una con su «quitar» */
+  function bloqueFotosRec() {
+    const fotos = ed.lista.map(f => ({ u: src(f) })).concat(ed.nuevas.map(x => ({ u: x.url })));
+    return (fotos.length ? '<div class="f-fotos">' + fotos.map((x, i) => '<span class="f-ft"><img src="' + x.u + '" alt="Foto ' + (i + 1) + '">' +
+      '<button type="button" class="ib" data-f="quitar-foto" data-i="' + i + '" aria-label="Quitar foto ' + (i + 1) + '">' + ico('x') + '</button></span>').join('') + '</div>'
+      : '<span class="ph">' + ico('foto') + '</span>') +
+      '<div class="pills"><button type="button" class="pill" data-f="foto">' + ico('foto') + (fotos.length ? 'Añadir más fotos' : 'Añadir fotos') + '</button></div>';
+  }
+  const bloqueFotoEd = () => ed.v.recuerdos ? bloqueFotosRec() : bloqueFoto();
   function bloqueFoto() {
     const u = ed.nueva ? ed.nueva.url : (ed.f ? src(ed.f) : '');
     return (u ? '<img src="' + u + '" alt="Foto del punto">' : '<span class="ph">' + ico('foto') + '</span>') +
@@ -2032,7 +2059,7 @@
   function abrirPunto(v, p) {
     if (hModo === 'punto' && ed && ed.v === v && ed.p === p) return;
     if (!editando || (!p && !posNueva)) { ir(baseDe(v), true, {}); return; }
-    ed = { v, p, pos: p ? (p.lat != null ? { lat: p.lat, lng: p.lng } : null) : posNueva, f: p ? p.f || null : null, nueva: null, fechaFoto: null };
+    ed = { v, p, pos: p ? (p.lat != null ? { lat: p.lat, lng: p.lng } : null) : posNueva, f: p ? p.f || null : null, nueva: null, fechaFoto: null, lista: p ? fotosDe(p) : [], nuevas: [] };
     posNueva = null;
     const x = p || { nombre: nombreNuevo, fecha: fechaNueva };
     nombreNuevo = '';
@@ -2047,7 +2074,7 @@
       '<label class="campo">Nombre<input id="f-nombre" type="text" maxlength="80" value="' + esc(x.nombre) + '" placeholder="Por ejemplo: Mirador de Santa Luzia"></label>' +
       '<label class="campo">Fecha<input id="f-pfecha" type="date" value="' + esc((x.fecha || '').slice(0, 10)) + '"></label>' +
       '<label class="campo">Comentario<textarea id="f-ptxt" rows="2" maxlength="500" placeholder="Qué pasó aquí">' + esc(x.txt) + '</textarea></label>' +
-      '<fieldset class="campo"><legend>Foto</legend><div class="f-foto" id="f-foto">' + bloqueFoto() + '</div></fieldset>' +
+      '<fieldset class="campo"><legend>' + (esRec ? 'Fotos' : 'Foto') + '</legend><div class="f-foto" id="f-foto">' + bloqueFotoEd() + '</div></fieldset>' +
       '<fieldset class="campo"><legend>Ubicación</legend><p class="nota" id="f-ppos">' + textoPos(ed.pos, 'Sin ubicación.') + '</p>' +
       '<button type="button" class="pill" data-f="colocar">' + ico('diana') + (ed.pos ? 'Mover en el mapa' : 'Colocar en el mapa') + '</button></fieldset>' +
       '<p class="error" role="alert" hidden></p>' +
@@ -2059,11 +2086,25 @@
     const val = id => $('#' + id, caja).value.trim();
     const nombre = val('f-nombre'), txt = val('f-ptxt');
     let fecha = val('f-pfecha');
-    if (!nombre && !txt && !ed.f && !ed.nueva) { error(caja, 'Pon un nombre o una foto al punto.'); $('#f-nombre', caja).focus(); return; }
+    const hayFoto = ed.v.recuerdos ? ed.lista.length + ed.nuevas.length > 0 : !!(ed.f || ed.nueva);
+    if (!nombre && !txt && !hayFoto) { error(caja, 'Pon un nombre o una foto al punto.'); $('#f-nombre', caja).focus(); return; }
     const { v } = ed;
     let p = ed.p;
     if (!p) { p = { id: nuevoId(v) }; v.puntos = puntosDe(v); v.puntos.push(p); }
-    if (ed.nueva) {
+    if (v.recuerdos) { /* un recuerdo guarda una lista de fotos: f es la primera y fs las demás */
+      for (const x of ed.nuevas) {
+        const nf = nombreLibre(v.id, 'jpg');
+        await guardarArchivo(nf, x.blob);
+        URL.revokeObjectURL(x.url);
+        ed.lista.push(nf);
+      }
+      ed.nuevas = [];
+      fotosDe(p).filter(f => !ed.lista.includes(f)).forEach(f => { if (v.portada === f) delete v.portada; soltar(f); });
+      if (ed.lista.length) { p.f = ed.lista[0]; if (ed.lista.length > 1) p.fs = ed.lista.slice(1); else delete p.fs; }
+      else { delete p.f; delete p.fs; }
+      if (!fecha && ed.fechaFoto && ed.lista.length) fecha = ed.fechaFoto;
+      ed.fechaFoto = null;
+    } else if (ed.nueva) {
       const nombreF = nombreLibre(v.id, 'jpg');
       await guardarArchivo(nombreF, ed.nueva.blob);
       URL.revokeObjectURL(ed.nueva.url);
@@ -2148,7 +2189,13 @@
         if (pos) { ed.pos = pos; $('#f-ppos', caja).textContent = textoPos(pos); }
         $('[data-f="colocar"]', caja).focus();
       });
-    } else if (a === 'foto') { modoEntrada = 'punto'; abrirEntrada('image/*', false); }
+    } else if (a === 'foto') { modoEntrada = 'punto'; abrirEntrada('image/*', !!(ed && ed.v.recuerdos)); }
+    else if (a === 'quitar-foto') { /* un recuerdo: quita una de sus fotos (las guardadas primero, luego las nuevas) */
+      const i = +b.dataset.i, n = ed.lista.length;
+      if (i < n) ed.lista.splice(i, 1);
+      else { const [x] = ed.nuevas.splice(i - n, 1); if (x) URL.revokeObjectURL(x.url); }
+      $('#f-foto', caja).innerHTML = bloqueFotosRec();
+    }
     else if (a === 'sin-foto') {
       if (ed.nueva) { URL.revokeObjectURL(ed.nueva.url); ed.nueva = null; }
       ed.f = null;
@@ -2162,7 +2209,7 @@
       const { v, p } = ed;
       v.puntos.splice(v.puntos.indexOf(p), 1);
       if (p.f && v.portada === p.f) delete v.portada;
-      soltar(p.f);
+      fotosDe(p).forEach(soltar);
       guardar();
       cerrarCapa(baseDe(v));
       repintar(v);
@@ -2200,7 +2247,7 @@
       });
     } else if (a === 'borrar') {
       if (b.dataset.ok !== '1') { b.dataset.ok = '1'; $('span', b).textContent = '¿Seguro? Toca otra vez'; return true; }
-      puntosDe(v).forEach(q => soltar(q.f));
+      puntosDe(v).forEach(q => fotosDe(q).forEach(soltar));
       adjuntosDe(v).forEach(q => soltar(q.f));
       datos.splice(datos.indexOf(v), 1);
       guardar();
@@ -2394,6 +2441,21 @@
     if (modoEntrada === 'viaje') { if (viajeActual) anadirFotos(viajeActual, files); return; }
     if (modoEntrada === 'adjunto') { if (adjuntarA) anadirAdjuntos(adjuntarA, files); return; }
     if (!ed) return;
+    if (ed.v.recuerdos) { /* un recuerdo admite varias fotos: se preparan todas */
+      toast(files.length > 1 ? 'Preparando ' + files.length + ' fotos…' : 'Preparando la foto…', true);
+      try {
+        for (const f of files) {
+          const r = await prepararFoto(f);
+          ed.nuevas.push({ blob: r.blob, url: URL.createObjectURL(r.blob) });
+          if (!ed.fechaFoto && r.ex.fecha) ed.fechaFoto = r.ex.fecha;
+          if (!ed.pos && r.ex.lat != null) { ed.pos = { lat: r.ex.lat, lng: r.ex.lng }; $('#f-ppos', caja).textContent = textoPos(ed.pos); }
+          if (r.ex.fecha && !$('#f-pfecha', caja).value) $('#f-pfecha', caja).value = r.ex.fecha.slice(0, 10);
+        }
+        $('#f-foto', caja).innerHTML = bloqueFotosRec();
+        toast(files.length > 1 ? 'Fotos listas' : 'Foto lista');
+      } catch (er) { toast('No se pudo leer alguna foto'); }
+      return;
+    }
     toast('Preparando la foto…', true);
     try {
       const r = await prepararFoto(files[0]);

@@ -38,7 +38,7 @@ Si se borra la app o los datos del navegador, lo guardado se pierde: la copia es
 - **Ver viajes** (botón del avión): elegir un viaje (con su número) o verlos todos. Cuando el mapa enseña un solo viaje, el avión pasa a ser un embudo relleno con el número de ese viaje en una bolita con aro blanco.
 - **Título de la ficha** o «N fotos y mapa»: abre el viaje con su galería. Dentro de un viaje, los botones de abajo, deslizar a los lados (móvil) o las flechas del teclado (ordenador) pasan al viaje anterior o al siguiente.
 - **Fotos:** viajes por años con su número de viaje («Viaje 1», «Viaje 2»…). Las flechas de los años (o deslizar el dedo sobre ellos) seleccionan el año de al lado, de uno en uno: Todos › 2025 › 2024… El botón junto al título cambia entre **lista** (una fila por viaje) y **mosaico** (todas las fotos en cuadros); la app recuerda la elegida.
-- **Recuerdos** (icono de la foto colgada con chincheta): sitios sueltos que no son un viaje (una escapada, una cena…), con nombre, fecha, comentario y foto, en lista o mosaico, con «Todos», corazón y años como en Fotos, y con su propio icono en el mapa. Se guardan en la copia de seguridad. Desde «Editar recuerdo › Dónde se guarda» se pasan a un viaje o a un viaje nuevo.
+- **Recuerdos** (icono de la foto colgada con chincheta; en el mapa se ven siempre con ese icono, con un número si tienen varias fotos): sitios sueltos que no son un viaje (una escapada, una cena…), con nombre, fecha, comentario y una o varias fotos (en el formulario, «Añadir fotos» admite varias a la vez; en el visor, sus miniaturas cambian de foto), en lista o mosaico, con «Todos», corazón y años como en Fotos, y con su propio icono en el mapa. Se guardan en la copia de seguridad. Desde «Editar recuerdo › Dónde se guarda» se pasan a un viaje o a un viaje nuevo.
 - **Mi ubicación** (flecha, columna izquierda del mapa): enseña dónde estás con una esferita azul, como en el iPhone. Su ventana permite **Guardar aquí como recuerdo** (se guarda al momento con el sitio y la hora; luego puedes añadir foto o nota), **Empezar un viaje aquí** o **Agregar a un viaje**. No se guarda ni se envía a ningún sitio. Necesita permiso de ubicación y https.
 - **Marcar un sitio:** mantén el dedo pulsado en el mapa (clic derecho en el ordenador) o búscalo con la lupa. Su ventana ofrece **Guardar como recuerdo**, **Crear viaje** o **Agregar a un viaje**.
 - **Ampliar una foto:** en el visor, con la lupa, doble toque, pellizco o la rueda del ratón; arrastra para moverla. Las fotos nuevas se guardan a 2560 px para que se vean nítidas.
@@ -65,7 +65,7 @@ Si se borra la app o los datos del navegador, lo guardado se pierde: la copia es
 
 ## Al actualizar la app
 
-En `index.html`, los archivos llevan un número de versión (`main.js?v=20261114t`). Cada vez que se cambie `main.js`, `style.css` o `viajes.js`, hay que cambiar ese número en `index.html` y subirlo también: así los móviles cargan la versión nueva en vez de la guardada.
+En `index.html`, los archivos llevan un número de versión (`main.js?v=20261116s`). Cada vez que se cambie `main.js`, `style.css` o `viajes.js`, hay que cambiar ese número en `index.html` y subirlo también: así los móviles cargan la versión nueva en vez de la guardada.
 
 ## Cambiar los ejemplos
 

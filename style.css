@@ -11,10 +11,10 @@
 }
 *{box-sizing:border-box}
 body{margin:0;background:var(--bg);color:var(--texto);font:15px/1.55 var(--font);-webkit-text-size-adjust:100%}
-body::before{content:"";position:fixed;inset:0 0 auto;height:env(safe-area-inset-top,0px);background:var(--head);z-index:40}
+body::before{content:"";position:fixed;top:0;right:0;bottom:auto;left:0;height:env(safe-area-inset-top,0px);background:var(--head);z-index:40}
 html.bloq,html.full{overflow:hidden}
 @media (max-width:899px){
-  .panel.inicio{min-height:100svh}
+  .panel.inicio{min-height:100vh;min-height:100svh}
 }
 a{color:var(--tturq)}
 h1,h2,h3{margin:0;line-height:1.2;color:var(--titulo)}
@@ -44,7 +44,10 @@ img{max-width:100%}
 .pill-h[aria-pressed="true"]{background:var(--acento);border-color:var(--acento)}
 .pills{display:flex;flex-wrap:wrap;gap:.45rem;margin:0 0 1rem}
 .ib{display:inline-grid;place-items:center;width:40px;height:40px;flex:none;border-radius:50%;border:1px solid var(--line);background:transparent;color:var(--titulo);cursor:pointer}
-:focus-visible{outline:2px solid var(--tturq);outline-offset:2px}
+/* Foco (teclado y mando de la tele). Navegadores antiguos no entienden :focus-visible, así que primero :focus para todos;
+   la segunda regla solo la entienden los modernos y quita el marco al tocar con el dedo o el ratón. */
+:focus{outline:2px solid var(--tturq);outline-offset:2px}
+:focus:not(:focus-visible){outline:none}
 .ib.ib-h{border-color:rgba(255,255,255,.45);color:#fff}
 .pill[disabled]{opacity:.6;cursor:default}
 .pill[hidden]{display:none}
@@ -60,11 +63,11 @@ img{max-width:100%}
 .aviso b{color:var(--titulo)}
 
 /* Disposición */
-.mapa-wrap{position:relative;height:var(--alto,50svh);min-height:240px;border-bottom:1px solid var(--line)}
+.mapa-wrap{position:relative;height:var(--alto,50vh);min-height:240px;border-bottom:1px solid var(--line)}
 .panel{padding:1.1rem max(16px,env(safe-area-inset-right,0px)) calc(3rem + env(safe-area-inset-bottom,0px)) max(16px,env(safe-area-inset-left,0px));min-width:0}
 /* Escritorio: el mapa queda fijo a la derecha y el panel tiene su propio scroll */
 @media (min-width:900px){
-  body{display:flex;flex-direction:column;height:100svh;overflow:hidden}
+  body{display:flex;flex-direction:column;height:100vh;height:100svh;overflow:hidden}
   .app{flex:1;min-height:0;display:grid;grid-template-columns:minmax(360px,440px) 1fr;grid-template-rows:minmax(0,1fr)}
   .mapa-wrap{grid-column:2;grid-row:1;height:100%;min-height:0;border-bottom:0;border-left:1px solid var(--line)}
   .panel{grid-column:1;grid-row:1;padding-top:1.4rem;overflow-y:auto;overscroll-behavior:contain}
@@ -300,7 +303,7 @@ img{max-width:100%}
 .leaflet-popup-content .pill{margin-top:.5rem;min-height:34px}
 .leaflet-container a.leaflet-popup-close-button{color:var(--muted);width:32px;height:32px;font:20px/32px var(--font)}
 .m-m{display:grid;place-items:center;border:2px solid var(--oro);border-radius:50%;background:var(--azul);color:#fff;box-shadow:var(--sombra)}
-.leaflet-container .m-m img{position:absolute;inset:0;width:100%;height:100%;border-radius:50%;object-fit:cover;display:block}
+.leaflet-container .m-m img{position:absolute;top:0;right:0;bottom:0;left:0;width:100%;height:100%;border-radius:50%;object-fit:cover;display:block}
 .m-l{background:var(--acento)}
 .m-r{border-color:#fff;color:var(--tturq)}
 /* Mi ubicación: esferita azul como la del iPhone, con su halo */
@@ -375,20 +378,20 @@ img{max-width:100%}
 .pin-pop .nota{margin:.2rem 0 0}
 .pin-pop .pill{margin:0;justify-content:flex-start}
 .pin-pop .pill span{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.full .mapa-wrap{position:fixed;inset:0;z-index:45;width:100%;height:100%;min-height:0;max-height:none;border:0}
+.full .mapa-wrap{position:fixed;top:0;right:0;bottom:0;left:0;z-index:45;width:100%;height:100%;min-height:0;max-height:none;border:0}
 .full .m-ctrl,.full .m-menu,.full .m-busca{top:calc(10px + env(safe-area-inset-top,0px))}
 .full .leaflet-bottom{bottom:env(safe-area-inset-bottom,0px)}
 .m-cruz{display:none;position:absolute;left:50%;top:50%;z-index:1000;margin:-20px 0 0 -20px;color:var(--rojo);pointer-events:none}
 .m-cruz .ic{width:40px;height:40px;stroke-width:1.6}
 .eligiendo .m-cruz{display:block}
-.eligiendo .mapa-wrap{height:62svh;max-height:none}
+.eligiendo .mapa-wrap{height:62vh;height:62svh;max-height:none}
 .elegir{position:fixed;left:50%;bottom:calc(14px + env(safe-area-inset-bottom,0px));z-index:45;transform:translateX(-50%);width:min(440px,calc(100% - 24px));padding:.8rem 1rem;border:1px solid var(--line);border-radius:16px;background:var(--card);box-shadow:var(--sombra)}
 .elegir[hidden]{display:none}
 .elegir p{margin:0 0 .6rem;color:var(--titulo);font-size:.9rem}
 .fila{display:flex;flex-wrap:wrap;gap:.5rem;justify-content:flex-end}
 
 /* Visor de fotos */
-.visor{position:fixed;inset:0;z-index:60;display:flex;flex-direction:column;background:#0b1722;color:#fff;padding:env(safe-area-inset-top,0px) env(safe-area-inset-right,0px) env(safe-area-inset-bottom,0px) env(safe-area-inset-left,0px)}
+.visor{position:fixed;top:0;right:0;bottom:0;left:0;z-index:60;display:flex;flex-direction:column;background:#0b1722;color:#fff;padding:env(safe-area-inset-top,0px) env(safe-area-inset-right,0px) env(safe-area-inset-bottom,0px) env(safe-area-inset-left,0px)}
 .visor[hidden]{display:none}
 .v-barra{display:flex;align-items:center;gap:.6rem;padding:.6rem .8rem}
 .v-cont{flex:1;margin:0;font-size:.9rem;color:#c3cfdb;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
@@ -421,10 +424,10 @@ img{max-width:100%}
 }
 
 /* Hoja (formulario y subida) */
-.hoja{position:fixed;inset:0;z-index:50;display:flex;align-items:flex-end;justify-content:center;background:rgba(11,23,34,.6)}
+.hoja{position:fixed;top:0;right:0;bottom:0;left:0;z-index:50;display:flex;align-items:flex-end;justify-content:center;background:rgba(11,23,34,.6)}
 .hoja[hidden]{display:none}
-.h-caja{width:100%;max-width:560px;max-height:92svh;overflow:auto;overscroll-behavior:contain;padding:1rem 1rem calc(1rem + env(safe-area-inset-bottom,0px));border-radius:18px 18px 0 0;background:var(--bg);color:var(--texto)}
-@media (min-width:700px){.hoja{align-items:center}.h-caja{border-radius:18px;max-height:88svh}}
+.h-caja{width:100%;max-width:560px;max-height:92vh;max-height:92svh;overflow:auto;overscroll-behavior:contain;padding:1rem 1rem calc(1rem + env(safe-area-inset-bottom,0px));border-radius:18px 18px 0 0;background:var(--bg);color:var(--texto)}
+@media (min-width:700px){.hoja{align-items:center}.h-caja{border-radius:18px;max-height:88vh;max-height:88svh}}
 .h-cab{display:flex;align-items:center;justify-content:space-between;gap:.6rem;margin-bottom:.6rem}
 .h-cab .ttl{margin:0}
 .campo{display:block;margin:0 0 .85rem;padding:0;border:0;font-size:.88rem;font-weight:500;color:var(--titulo)}
@@ -488,3 +491,25 @@ textarea{resize:vertical}
 /* Página del viaje con un recuerdo elegido: las demás fotos, apagadas */
 .galeria .ft{transition:opacity .15s}
 .galeria .ft.off{opacity:.3}
+
+/* Navegadores antiguos (teles, móviles viejos): cuadrados sin aspect-ratio */
+@supports not (aspect-ratio:1){
+  .ft{height:0;padding-bottom:100%}
+  .ft img{position:absolute;top:0;left:0;width:100%;height:100%}
+  .fi-fotos img{height:auto;min-height:60px}
+}
+/* Pantalla completa: el mapa tapa todo y lo de detrás deja de pintarse, para que nunca se transparente */
+.full .top,.full .aviso,.full .panel{visibility:hidden}
+.full .mapa-wrap{background:var(--mar)}
+/* con var() el respaldo no funciona solo: svh únicamente donde se entiende */
+@supports (height:1svh){.mapa-wrap{height:var(--alto,50svh)}}
+
+/* Botones redondos y marcadores: el anillo de foco sigue su forma (en navegadores antiguos el outline sale cuadrado) */
+.m-ctrl button:focus,.pill:focus,.ib:focus,.tab:focus,.ovalos button:focus,.v-btn:focus,.czb:focus,.m-logo:focus,.leaflet-marker-icon:focus{outline:none;box-shadow:0 0 0 2px var(--bg),0 0 0 4px var(--tturq)}
+.m-ctrl button:focus:not(:focus-visible),.pill:focus:not(:focus-visible),.ib:focus:not(:focus-visible),.tab:focus:not(:focus-visible),.ovalos button:focus:not(:focus-visible),.v-btn:focus:not(:focus-visible),.czb:focus:not(:focus-visible),.m-logo:focus:not(:focus-visible),.leaflet-marker-icon:focus:not(:focus-visible){box-shadow:none}
+/* El pin de un sitio buscado no tiene fondo: con foco se marca su silueta, nunca un cuadrado */
+.m-pin{background:none;border:0}
+.m-pin:focus{outline:none;box-shadow:none}
+.m-pin:focus svg path{stroke:var(--tturq);stroke-width:3}
+/* Botón encendido con el puntero encima (tele con cursor): sigue viéndose encendido */
+.m-ctrl button[aria-pressed="true"]:hover,.m-ctrl button[aria-expanded="true"]:hover,.pill[aria-pressed="true"]:hover{background:var(--acento);color:#fff}

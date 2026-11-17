@@ -6,6 +6,15 @@
    visor de fotos · hojas de edición · copia de seguridad · rutas por hash (#fotos, #v/…). */
 (function () {
   'use strict';
+  /* Pantallas muy anchas (teles 4K que se anuncian con 3840 px): se amplía todo para que se lea como en 1920.
+     Teles y ordenadores normales (hasta 2559 px) se quedan tal cual. */
+  function escalaPantalla() {
+    const w = window.innerWidth * (parseFloat(document.documentElement.style.zoom) || 1);
+    const f = w >= 2560 ? Math.min(2, w / 1920) : 1;
+    document.documentElement.style.zoom = f === 1 ? '' : f.toFixed(3);
+  }
+  escalaPantalla();
+  window.addEventListener('resize', escalaPantalla);
 
   /* ===================== Utilidades ===================== */
   const $ = (s, el) => (el || document).querySelector(s);
@@ -531,7 +540,9 @@
       ajustar(lista, zMax) {
         if (!lista.length) return;
         if (lista.length === 1) { api.volar(lista[0].lat, lista[0].lng, zMax || 11); return; }
-        map.fitBounds(L.latLngBounds(lista.map(p => [p.lat, p.lng])), { padding: [50, 50], maxZoom: zMax || 15, animate: !menosMov.matches });
+        /* margen para que ningún círculo quede en el borde ni bajo los botones de los lados; crece con pantallas grandes (teles) */
+        const t = map.getSize(), mx = Math.round(Math.max(72, t.x * .06)), my = Math.round(Math.max(48, t.y * .08));
+        map.fitBounds(L.latLngBounds(lista.map(p => [p.lat, p.lng])), { paddingTopLeft: [mx, my], paddingBottomRight: [mx, my], maxZoom: zMax || 15, animate: !menosMov.matches });
       },
       marcas(lista, fab, toc, mov) {
         puntos = lista; fabrica = fab; tocar = toc; mover = mov || null;

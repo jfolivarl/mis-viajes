@@ -973,20 +973,23 @@
   }
   /* Recuerdo elegido en una ficha: el mapa enseña solo sus fotos. Se suelta al cambiar de viaje o al abrir uno. */
   let tramoMapa = null;
-  function ponTramo(art, v, nombre) {
-    art.querySelectorAll('[data-tramo]').forEach(b => b.setAttribute('aria-pressed', String(!!nombre && b.dataset.tramo === nombre)));
-    const bloque = art.querySelector('.fi-fotos, .fi-sin');
+  function ponTramo(caja, v, nombre) {
+    caja.querySelectorAll('[data-tramo]').forEach(b => b.setAttribute('aria-pressed', String(!!nombre && b.dataset.tramo === nombre)));
+    const bloque = caja.querySelector('.fi-fotos, .fi-sin');
     if (bloque) bloque.outerHTML = fotosFicha(v, nombre);
+    /* página del viaje: las fotos de otros recuerdos se quedan, pero apagadas */
+    const del = nombre ? fotosDeTramo(v, nombre).map(p => p.id) : null;
+    caja.querySelectorAll('.galeria .ft').forEach(b => b.classList.toggle('off', !!del && del.indexOf(b.dataset.p) < 0));
   }
   function soltarTramo() {
     if (!tramoMapa) return;
-    const art = $('#ficha-' + tramoMapa.id), v = porId(tramoMapa.id);
+    const v = porId(tramoMapa.id), caja = $('#ficha-' + tramoMapa.id) || (viajeActual === v ? panel : null);
     tramoMapa = null;
-    if (art && v) ponTramo(art, v, '');
+    if (caja && v) ponTramo(caja, v, '');
   }
   function mapaViaje(v, ajustar) {
     enMapa = v.id;
-    if (tramoMapa && (viajeActual || tramoMapa.id !== v.id)) soltarTramo();
+    if (tramoMapa && tramoMapa.id !== v.id) soltarTramo();
     const delTramo = tramoMapa ? fotosDeTramo(v, tramoMapa.nombre) : null;
     const todos = ubicados(v).filter(o => !delTramo || delTramo.includes(o)), favs = todos.filter(o => o.fav), p = posicion(v);
     const g = soloFav ? favs : todos; /* en modo corazón, solo las favoritas */
@@ -1741,6 +1744,7 @@
 
   /* ---------- Detalle de un viaje: fotos, lugares y mapa ---------- */
   function pintarViaje(v) {
+    tramoMapa = null;
     viajeActual = v;
     const fs = conFoto(v), lugares = puntosDe(v).filter(p => !p.f), n = dias(v), ord = ordenados(), k = ord.indexOf(v);
     const sinUbic = fs.filter(p => p.lat == null).length;
@@ -1748,7 +1752,7 @@
     let h = '<a class="pill volver" href="' + HASH[tab] + '">' + ico('izq') + { viajes: 'Volver a mis viajes', fotos: 'Volver a todas las fotos' }[tab] + '</a>';
     h += '<h2 class="ttl">' + esc(v.titulo) + '</h2><div class="meta">' +
       (v.desde ? '<span>' + ico('cal') + rango(v) + (n > 1 ? ' · ' + n + ' días' : '') + '</span>' : '') + '</div>' +
-      ovalos(lugaresDe(v).length ? lugaresDe(v) : (v.lugar ? [v.lugar] : []));
+      ovalosFicha(v, lugaresDe(v).length ? lugaresDe(v) : (v.lugar ? [v.lugar] : []));
     if (v.texto) h += '<p class="texto">' + esc(v.texto).replace(/\n/g, '<br>') + '</p>';
     if (enl.length) {
       h += '<div class="pills enlaces">' + enl.map(e => '<a class="pill" href="' + esc(e.u) + '" target="_blank" rel="noopener">' +
@@ -1797,6 +1801,7 @@
     const cambiaVista = vistaKey.split(':').slice(0, 2).join(':') !== key.split(':').slice(0, 2).join(':');
     const pista = $('.pista', panel), x = pista ? pista.scrollLeft : 0;
     vistaKey = key;
+    if (vista !== 'viaje' && tramoMapa && !$('#ficha-' + tramoMapa.id)) tramoMapa = null; /* al salir del viaje se suelta su recuerdo */
     panel.classList.toggle('inicio', vista !== 'viaje');
     if (vista === 'viaje') pintarViaje(v); else pintarInicio();
     if (cambiaVista) { window.scrollTo(0, 0); panel.scrollTop = 0; }
@@ -2498,10 +2503,10 @@
     if (dot) { const f = $('.pista', panel).children[+dot.dataset.ir]; if (f) enfocarFicha(f); return; }
     const tr = t.closest('[data-tramo]');
     if (tr) {
-      const art = tr.closest('.fi'), v = art && porId(art.dataset.id), on = tr.getAttribute('aria-pressed') !== 'true';
+      const art = tr.closest('.fi'), caja = art || panel, v = art ? porId(art.dataset.id) : viajeActual, on = tr.getAttribute('aria-pressed') !== 'true';
       if (!v) return;
       soltarTramo();
-      if (on) { tramoMapa = { id: v.id, nombre: tr.dataset.tramo }; ponTramo(art, v, tramoMapa.nombre); }
+      if (on) { tramoMapa = { id: v.id, nombre: tr.dataset.tramo }; ponTramo(caja, v, tramoMapa.nombre); }
       seguir = true;
       mapaViaje(v, true); /* la burbuja y el mapa enseñan lo mismo */
       return;

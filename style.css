@@ -478,3 +478,7 @@ textarea{resize:vertical}
   .top .deco circle,.entra-d,.entra-i{animation:none}
   .m-ctrl button,.ft img,.mini img,.fi-add{transition:none}
 }
+
+/* Página del viaje con un recuerdo elegido: las demás fotos, apagadas */
+.galeria .ft{transition:opacity .15s}
+.galeria .ft.off{opacity:.3}

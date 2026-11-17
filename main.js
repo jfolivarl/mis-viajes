@@ -90,12 +90,24 @@
     const dia = (x.fecha || '').slice(0, 10), igual = dia && con.find(q => (q.fecha || '').slice(0, 10) === dia);
     return igual ? nombre(igual.tramo) : '';
   }
+  /* Cómo se llegó a cada recuerdo, solo con dibujitos. En los datos, v.llegadas = { "Miami": "avion", "Puerto de Mogán": "avion coche" }. Opcional. */
+  const MEDIOS = { avion: 'en avión', barco: 'en barco', coche: 'en coche', bus: 'en autobús', tren: 'en tren', pie: 'caminando' };
+  function llegadaA(v, x) {
+    const ll = v.llegadas || {}, k = Object.keys(ll).find(n => mismoTramo(n, x));
+    const t = k ? String(ll[k]).trim().split(/\s+/) : [];
+    const medios = t.filter(w => MEDIOS[w.toLowerCase()]).map(w => w.toLowerCase());
+    if (!medios.length) return '';
+    return '<span class="lleg" role="img" aria-label="Llegada a ' + esc(x) + ' ' + medios.map(m => MEDIOS[m]).join(' y ') + '">' + medios.map(m => ico(m)).join('') + '</span>';
+  }
   /* Burbujas de la ficha: la que tiene fotos es un botón que las enseña; las demás quedan como estaban */
   const ovalosFicha = (v, lista) => lista.length ? '<div class="ovalos">' + lista.map(x => {
     const fs = fotosDeTramo(v, x), n = fs.length;
     /* con fotos: su primera foto en pequeño y se puede tocar; sin fotos: la burbuja de siempre, algo más apagada */
-    return n ? '<button type="button" data-tramo="' + esc(x) + '" aria-pressed="false" aria-label="' + esc(x) + ': ver sus ' + plural(n, 'foto', 'fotos') + '"><img src="' + peq(fs[0].f) + '" alt="" loading="lazy">' + esc(x) + '<small>' + n + '</small></button>'
+    /* la chincheta de siempre; al elegir el recuerdo, la chincheta se cambia por su foto */
+    const burbuja = n ? '<button type="button" data-tramo="' + esc(x) + '" aria-pressed="false" aria-label="' + esc(x) + ': ver sus ' + plural(n, 'foto', 'fotos') + '">' + ico('pin') + '<img src="' + peq(fs[0].f) + '" alt="" loading="lazy">' + esc(x) + '<small>' + n + '</small></button>'
       : '<span class="sin">' + ico('pin') + esc(x) + '</span>';
+    const ll = llegadaA(v, x);
+    return ll ? '<div class="par">' + ll + burbuja + '</div>' : burbuja;
   }).join('') + '</div>' : '';
   const ovalos = (lista, cls) => lista.length ? '<div class="ovalos' + (cls ? ' ' + cls : '') + '">' + lista.map(x => '<span>' + ico('pin') + esc(x) + '</span>').join('') + '</div>' : '';
 

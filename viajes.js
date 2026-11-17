@@ -55,7 +55,12 @@ window.VIAJES = [
    }
   ],
   "lat": 27.8163,
-  "lng": -15.7637
+  "lng": -15.7637,
+  "llegadas": {
+   "Puerto de Mogán": "avion coche",
+   "Muelle": "pie",
+   "Calle de las buganvillas": "pie"
+  }
  },
  {
   "id": "disney-2025",
@@ -77,7 +82,10 @@ window.VIAJES = [
    }
   ],
   "lat": 48.8674,
-  "lng": 2.7796
+  "lng": 2.7796,
+  "llegadas": {
+   "Disney Adventure World": "avion"
+  }
  },
  {
   "id": "miami-bahamas-2024",
@@ -132,7 +140,11 @@ window.VIAJES = [
    }
   ],
   "lat": 25.7857,
-  "lng": -80.1646
+  "lng": -80.1646,
+  "llegadas": {
+   "Miami": "avion",
+   "Ocean Cay": "barco"
+  }
  },
  {
   "id": "manizales-2023",
@@ -154,7 +166,11 @@ window.VIAJES = [
    }
   ],
   "lat": 5.0688,
-  "lng": -75.5174
+  "lng": -75.5174,
+  "llegadas": {
+   "Catedral Basílica": "avion",
+   "Plaza de Bolívar": "pie"
+  }
  },
  {
   "id": "visitando-francia",
@@ -214,7 +230,11 @@ window.VIAJES = [
    }
   ],
   "lat": 45.5,
-  "lng": -0.86
+  "lng": -0.86,
+  "llegadas": {
+   "Burdeos": "coche",
+   "La Rochelle": "coche"
+  }
  },
  {
   "id": "recuerdos",

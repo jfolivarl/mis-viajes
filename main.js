@@ -336,6 +336,18 @@
     const grupo = L.layerGroup().addTo(map);
     let pin = null, yo = null, yoAcc = null;
 
+    /* La línea de la ruta solo une círculos que se ven: si un punto se junta con otro en un cúmulo, su tramo desaparece */
+    let rutaDatos = null, sitio = {};
+    function dibujaRuta() {
+      if (linea) { linea.remove(); linea = null; }
+      if (!rutaDatos) return;
+      const l = [];
+      rutaDatos.forEach(q => {
+        const c = sitio[q[0] + ',' + q[1]], u = l[l.length - 1];
+        if (c && !(u && u[0] === c[0] && u[1] === c[1])) l.push(c);
+      });
+      if (l.length > 1) linea = L.polyline(l, { color: '#D6AD55', weight: 3, dashArray: '2 8', lineCap: 'round', interactive: false }).addTo(map);
+    }
     function pintarMarcas() {
       grupo.clearLayers();
       if (!fabrica) return;
@@ -345,6 +357,9 @@
         const g = grupos.find(o => Math.abs(o.x - q.x) < R && Math.abs(o.y - q.y) < R);
         if (g) g.items.push(p); else grupos.push({ x: q.x, y: q.y, items: [p] });
       });
+      sitio = {};
+      grupos.forEach(g => g.items.forEach(i => { sitio[i.lat + ',' + i.lng] = [g.items[0].lat, g.items[0].lng]; }));
+      dibujaRuta();
       grupos.forEach(g => {
         const p = g.items[0], solo = g.items.length === 1, f = fabrica(g.items), arrastra = !!(mover && solo && f.mov !== false);
         const m = L.marker([p.lat, p.lng], {
@@ -433,8 +448,8 @@
         pintarMarcas();
       },
       ruta(lista) {
-        if (linea) linea.remove();
-        linea = lista && lista.length > 1 ? L.polyline(lista, { color: '#D6AD55', weight: 3, dashArray: '2 8', lineCap: 'round', interactive: false }).addTo(map) : null;
+        rutaDatos = lista && lista.length > 1 ? lista : null;
+        dibujaRuta();
       },
       resaltar(id) {
         resalte = id;
@@ -834,13 +849,15 @@
     };
   }
 
-  /* Un recuerdo se ve siempre con su icono; si tiene varias fotos, el número de fotos (o de recuerdos, si hay varios en el mismo sitio) */
+  /* Un recuerdo se ve con su foto (o su icono si no tiene); si tiene varias fotos, el número de fotos (o de recuerdos, si hay varios en el mismo sitio) */
   function marcaRecuerdo(items) {
     const p = items[0].p, n = items.length, k = fotosDe(p).length;
+    /* se ve su foto (la del primero que tenga); el logo, solo si ninguno tiene foto */
+    const cf = items.map(i => i.p).find(q => q.f), f = cf && cf.f;
     return {
-      clase: 'm-r', tam: 32,
+      clase: 'm-r' + (f ? ' m-rf' : ''), tam: f ? 38 : 32,
       titulo: n > 1 ? n + ' recuerdos aquí' : 'Recuerdo: ' + nombrePunto(p),
-      html: ico('recuerdo') + (n > 1 ? '<span class="m-n">' + n + '</span>' : k > 1 ? '<span class="m-n">' + k + '</span>' : '')
+      html: (f ? '<img src="' + peq(f) + '" alt="">' : ico('recuerdo')) + (n > 1 ? '<span class="m-n">' + n + '</span>' : k > 1 ? '<span class="m-n">' + k + '</span>' : '')
     };
   }
   const puntosRec = () => ubicados(rec).filter(o => (!soloFav || o.fav) && (tab !== 'rec' || !filtroRec || anioP(o) === filtroRec)).map(o => ({ id: 'recuerdos/' + o.id, lat: o.lat, lng: o.lng, v: rec, p: o }));

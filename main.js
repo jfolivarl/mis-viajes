@@ -566,8 +566,10 @@
         if (!sinZoom) map.setView([la, ln], Math.max(map.getZoom(), 15), { animate: false });
         pin = L.marker([la, ln], {
           icon: L.divIcon({ className: 'm-pin', iconSize: [34, 42], iconAnchor: [17, 41], popupAnchor: [0, -38],
-            html: '<svg viewBox="0 0 34 42" aria-hidden="true"><path d="M17 41S2.5 26.5 2.5 16a14.5 14.5 0 0 1 29 0C31.5 26.5 17 41 17 41z"/><circle cx="17" cy="16" r="5.5"/></svg>' }),
-          zIndexOffset: 2000, keyboard: true, alt: 'Lugar buscado'
+            /* la sombra va dibujada dentro del propio pin: los efectos CSS de sombra salen como un cuadrado oscuro en algunas teles */
+            html: '<svg viewBox="0 0 34 42" aria-hidden="true"><path class="pin-sombra" d="M17 42S2.5 27.5 2.5 17a14.5 14.5 0 0 1 29 0C31.5 27.5 17 42 17 42z"/><path d="M17 41S2.5 26.5 2.5 16a14.5 14.5 0 0 1 29 0C31.5 26.5 17 41 17 41z"/><circle cx="17" cy="16" r="5.5"/></svg>' }),
+          /* sin foco propio: el navegador de algunas teles dibuja su recuadro alrededor de lo enfocado; la ventana del sitio ya se abre sola */
+          zIndexOffset: 2000, keyboard: false, alt: 'Lugar buscado'
         }).addTo(map);
         pin.bindPopup(nodo, { maxWidth: 260, className: 'm-pop', autoPanPaddingTopLeft: [60, 16], autoPanPaddingBottomRight: [62, 50] }).openPopup();
       },

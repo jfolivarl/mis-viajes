@@ -18,6 +18,7 @@ window.VIAJES = [
     "fecha": "2025-03-14T11:20",
     "lat": 27.81655,
     "lng": -15.76395,
+    "tramo": "Puerto de Mogán",
     "nombre": "Casas de Mogán",
     "txt": "Palmeras y casas blancas con ribetes azules"
    },
@@ -27,6 +28,7 @@ window.VIAJES = [
     "fecha": "2025-03-14T12:05",
     "lat": 27.81612,
     "lng": -15.76305,
+    "tramo": "Puerto de Mogán",
     "nombre": "Arco de Puerto de Mogán",
     "txt": "La entrada al muelle"
    },
@@ -36,6 +38,7 @@ window.VIAJES = [
     "fecha": "2025-03-14T12:15",
     "lat": 27.81545,
     "lng": -15.7633,
+    "tramo": "Muelle",
     "nombre": "Muelle y faro",
     "txt": "El barco de Puerto Rico entrando en el puerto"
    },
@@ -46,6 +49,7 @@ window.VIAJES = [
     "fecha": "2025-03-15T10:40",
     "lat": 27.8169,
     "lng": -15.7645,
+    "tramo": "Calle de las buganvillas",
     "nombre": "Calle de las buganvillas",
     "txt": "Arcos cubiertos de flores"
    }
@@ -76,46 +80,13 @@ window.VIAJES = [
   "lng": 2.7796
  },
  {
-  "id": "ocean-cay-2024",
-  "titulo": "Ocean Cay",
-  "lugar": "Bahamas",
-  "itinerario": "Ocean Cay, Faro, Muelle del crucero",
-  "desde": "2024-12-15",
-  "hasta": "2024-12-15",
-  "texto": "La isla privada del crucero: agua turquesa, arena blanca y el faro de rayas rojas.",
-  "portada": "ocean-cay-02.jpg",
-  "puntos": [
-   {
-    "id": "p1",
-    "f": "ocean-cay-01.jpg",
-    "fecha": "2024-12-15T09:30",
-    "lat": 25.4196,
-    "lng": -79.2088,
-    "nombre": "Llegada a Ocean Cay",
-    "txt": "La torre azul junto al barco atracado"
-   },
-   {
-    "id": "p2",
-    "f": "ocean-cay-02.jpg",
-    "fav": true,
-    "fecha": "2024-12-15T12:00",
-    "lat": 25.4155,
-    "lng": -79.2132,
-    "nombre": "Vista de la isla",
-    "txt": "El faro y el crucero desde el aire"
-   }
-  ],
-  "lat": 25.4175,
-  "lng": -79.211
- },
- {
-  "id": "miami-2024",
-  "titulo": "Miami",
-  "lugar": "Florida, EE. UU.",
-  "itinerario": "Miami Beach, Wynwood",
+  "id": "miami-bahamas-2024",
+  "titulo": "Miami y las Bahamas",
+  "lugar": "Florida, EE. UU., y Ocean Cay, Bahamas",
+  "itinerario": "Miami, Ocean Cay",
   "desde": "2024-12-10",
-  "hasta": "2024-12-13",
-  "texto": "Playa en South Beach y arte urbano en Wynwood antes de subir al crucero.",
+  "hasta": "2024-12-15",
+  "texto": "Playa y murales en Miami y, después, la isla del crucero en las Bahamas: agua turquesa, arena blanca y el faro de rayas rojas.",
   "puntos": [
    {
     "id": "p1",
@@ -124,6 +95,7 @@ window.VIAJES = [
     "fecha": "2024-12-11T10:15",
     "lat": 25.7708,
     "lng": -80.1303,
+    "tramo": "Miami",
     "nombre": "Caseta de la calle 5",
     "txt": "Las casetas de socorristas de Miami Beach"
    },
@@ -133,8 +105,30 @@ window.VIAJES = [
     "fecha": "2024-12-12T16:40",
     "lat": 25.8005,
     "lng": -80.199,
+    "tramo": "Miami",
     "nombre": "Mural de Gosa",
     "txt": "Wynwood, el barrio de los murales"
+   },
+   {
+    "id": "oc1",
+    "f": "ocean-cay-01.jpg",
+    "fecha": "2024-12-15T09:30",
+    "lat": 25.4196,
+    "lng": -79.2088,
+    "nombre": "Llegada a Ocean Cay",
+    "txt": "La torre azul junto al barco atracado",
+    "tramo": "Ocean Cay"
+   },
+   {
+    "id": "oc2",
+    "f": "ocean-cay-02.jpg",
+    "fav": true,
+    "fecha": "2024-12-15T12:00",
+    "lat": 25.4155,
+    "lng": -79.2132,
+    "nombre": "Vista de la isla",
+    "txt": "El faro y el crucero desde el aire",
+    "tramo": "Ocean Cay"
    }
   ],
   "lat": 25.7857,
@@ -163,9 +157,13 @@ window.VIAJES = [
   "lng": -75.5174
  },
  {
-  "id": "recuerdos",
-  "recuerdos": true,
-  "titulo": "Recuerdos",
+  "id": "visitando-francia",
+  "titulo": "Visitando Francia",
+  "lugar": "Burdeos y La Rochelle, Francia",
+  "itinerario": "Burdeos, La Rochelle",
+  "desde": "2025-12-20",
+  "hasta": "2026-01-01",
+  "texto": "Navidad en la costa atlántica: vino caliente y el monumento a los Girondins en Burdeos, y las torres del puerto viejo de La Rochelle para empezar el año.",
   "puntos": [
    {
     "id": "p1",
@@ -173,9 +171,55 @@ window.VIAJES = [
     "fecha": "2025-12-20T19:10",
     "lat": 44.8379,
     "lng": -0.5736,
+    "tramo": "Burdeos",
     "nombre": "Vino caliente en Burdeos",
     "txt": "Un vin chaud para entrar en calor una tarde de invierno, en un bar de la rue Sainte-Catherine, la calle peatonal que cruza el casco antiguo hasta la Place de la Comédie."
+   },
+   {
+    "id": "p2",
+    "f": "burdeos-02.jpg",
+    "fecha": "2025-12-21",
+    "lat": 44.8413,
+    "lng": -0.5716,
+    "tramo": "Burdeos",
+    "nombre": "Monumento a los Girondins",
+    "txt": "La columna y la noria de Navidad en la Place des Quinconces"
+   },
+   {
+    "id": "p3",
+    "f": "larochelle-01.jpg",
+    "fecha": "2026-01-01",
+    "lat": 46.1558,
+    "lng": -1.1534,
+    "tramo": "La Rochelle",
+    "nombre": "Tour Saint-Nicolas"
+   },
+   {
+    "id": "p4",
+    "f": "larochelle-02.jpg",
+    "fecha": "2026-01-01",
+    "lat": 46.1549,
+    "lng": -1.1525,
+    "tramo": "La Rochelle",
+    "nombre": "Muralla junto al puerto"
+   },
+   {
+    "id": "p5",
+    "f": "larochelle-03.jpg",
+    "fecha": "2026-01-01",
+    "lat": 46.155851,
+    "lng": -1.154177,
+    "tramo": "La Rochelle",
+    "nombre": "Tour de la Chaîne"
    }
-  ]
+  ],
+  "lat": 45.5,
+  "lng": -0.86
+ },
+ {
+  "id": "recuerdos",
+  "recuerdos": true,
+  "titulo": "Recuerdos",
+  "puntos": []
  }
 ];

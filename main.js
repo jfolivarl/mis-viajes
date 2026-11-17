@@ -61,6 +61,42 @@
   const plural = (n, a, b) => n + ' ' + (n === 1 ? a : b);
   const coord = p => p.lat.toFixed(5) + ', ' + p.lng.toFixed(5);
   const lugaresDe = v => (v.itinerario || '').split(',').map(x => x.trim()).filter(Boolean);
+  /* ---------- Recuerdos de un viaje ----------
+     Cada lugar del itinerario es un recuerdo (un tramo del viaje). Una foto pertenece al recuerdo cuyo nombre
+     lleva en su campo opcional «tramo»; sin ese campo, todo funciona como siempre. No se guarda nada más. */
+  const mismoTramo = (a, b) => !!a && !!b && a.trim().toLowerCase() === b.trim().toLowerCase();
+  const fotosDeTramo = (v, nombre) => {
+    const fs = conFoto(v);
+    /* un viaje con una sola foto, aún sin recuerdo: se la queda la primera burbuja (solo al enseñarla; no se guarda) */
+    if (fs.length === 1 && !fs[0].tramo) return mismoTramo(lugaresDe(v)[0] || v.lugar, nombre) ? fs : [];
+    return fs.filter(p => mismoTramo(p.tramo, nombre));
+  };
+  /* Distancia en km entre dos puntos con lat y lng */
+  const km = (a, b) => {
+    const r = x => x * Math.PI / 180, dLa = r(b.lat - a.lat), dLn = r(b.lng - a.lng);
+    const h = Math.sin(dLa / 2) ** 2 + Math.cos(r(a.lat)) * Math.cos(r(b.lat)) * Math.sin(dLn / 2) ** 2;
+    return 12742 * Math.asin(Math.sqrt(h));
+  };
+  /* Recuerdo que se propone para una foto aún sin agrupar: el de la foto agrupada más cercana (a menos de 25 km)
+     o, sin ubicación, el de otra foto del mismo día. Solo es una propuesta: no se guarda hasta que la persona guarda. */
+  function tramoSugerido(v, x, pos) {
+    const lug = lugaresDe(v), nombre = t => lug.find(l => mismoTramo(l, t));
+    const con = puntosDe(v).filter(q => q !== x && nombre(q.tramo));
+    if (!con.length) return '';
+    if (pos) {
+      const cerca = con.filter(q => q.lat != null).map(q => ({ q, d: km(pos, q) })).sort((a, b) => a.d - b.d)[0];
+      if (cerca && cerca.d <= 25) return nombre(cerca.q.tramo);
+    }
+    const dia = (x.fecha || '').slice(0, 10), igual = dia && con.find(q => (q.fecha || '').slice(0, 10) === dia);
+    return igual ? nombre(igual.tramo) : '';
+  }
+  /* Burbujas de la ficha: la que tiene fotos es un botón que las enseña; las demás quedan como estaban */
+  const ovalosFicha = (v, lista) => lista.length ? '<div class="ovalos">' + lista.map(x => {
+    const fs = fotosDeTramo(v, x), n = fs.length;
+    /* con fotos: su primera foto en pequeño y se puede tocar; sin fotos: la burbuja de siempre, algo más apagada */
+    return n ? '<button type="button" data-tramo="' + esc(x) + '" aria-pressed="false" aria-label="' + esc(x) + ': ver sus ' + plural(n, 'foto', 'fotos') + '"><img src="' + peq(fs[0].f) + '" alt="" loading="lazy">' + esc(x) + '<small>' + n + '</small></button>'
+      : '<span class="sin">' + ico('pin') + esc(x) + '</span>';
+  }).join('') + '</div>' : '';
   const ovalos = (lista, cls) => lista.length ? '<div class="ovalos' + (cls ? ' ' + cls : '') + '">' + lista.map(x => '<span>' + ico('pin') + esc(x) + '</span>').join('') + '</div>' : '';
 
   let tToast = 0;
@@ -935,9 +971,24 @@
       (p.txt && p.nombre ? '<br>' + esc(p.txt) : '') +
       (editando ? '<br><a class="pill" href="#punto/' + v.id + '/' + p.id + '">' + ico('lapiz') + (v.recuerdos ? 'Editar recuerdo' : 'Editar punto') + '</a>' : ''));
   }
+  /* Recuerdo elegido en una ficha: el mapa enseña solo sus fotos. Se suelta al cambiar de viaje o al abrir uno. */
+  let tramoMapa = null;
+  function ponTramo(art, v, nombre) {
+    art.querySelectorAll('[data-tramo]').forEach(b => b.setAttribute('aria-pressed', String(!!nombre && b.dataset.tramo === nombre)));
+    const bloque = art.querySelector('.fi-fotos, .fi-sin');
+    if (bloque) bloque.outerHTML = fotosFicha(v, nombre);
+  }
+  function soltarTramo() {
+    if (!tramoMapa) return;
+    const art = $('#ficha-' + tramoMapa.id), v = porId(tramoMapa.id);
+    tramoMapa = null;
+    if (art && v) ponTramo(art, v, '');
+  }
   function mapaViaje(v, ajustar) {
     enMapa = v.id;
-    const todos = ubicados(v), favs = todos.filter(o => o.fav), p = posicion(v);
+    if (tramoMapa && (viajeActual || tramoMapa.id !== v.id)) soltarTramo();
+    const delTramo = tramoMapa ? fotosDeTramo(v, tramoMapa.nombre) : null;
+    const todos = ubicados(v).filter(o => !delTramo || delTramo.includes(o)), favs = todos.filter(o => o.fav), p = posicion(v);
     const g = soloFav ? favs : todos; /* en modo corazón, solo las favoritas */
     mapa.cerrarVentana();
     mapa.filtrado(v.titulo, numeros().get(v.id));
@@ -950,7 +1001,7 @@
           if (o.f) abrirFoto(v, o.id); else ventanaPunto(v, o);
         } else mapa.ajustar(grupo, 18);
       }, editando ? (o, pos) => { o.p.lat = pos.lat; o.p.lng = pos.lng; guardar(); mapaViaje(v, false); toast('Punto movido'); } : null);
-      mapa.verTodo = () => mapa.ajustar(pts, 15);
+      mapa.verTodo = () => mapa.ajustar(pts, delTramo ? 18 : 15); /* un recuerdo se mira más de cerca, para que sus fotos se separen */
     } else {
       const pts = p ? [{ id: v.id, lat: p.lat, lng: p.lng, v }] : [];
       mapa.marcas(pts, marcaViaje, () => { /* ya estás en este viaje */ },
@@ -1048,6 +1099,7 @@
     cerrarMenu();
     busca.hidden = false;
     b.setAttribute('aria-expanded', 'true');
+    if (q.value.trim().length < 3) pintarRecientes();
     q.focus();
   };
   async function pedir(url) {
@@ -1059,16 +1111,19 @@
     } finally { clearTimeout(reloj); }
   }
   /* Prueba dos buscadores libres: si uno falla o no encuentra nada, se usa el otro */
+  async function conPhoton(t) {
+    const j = await pedir('https://photon.komoot.io/api/?limit=5&q=' + encodeURIComponent(t));
+    return (j.features || []).map(f => {
+      const p = f.properties || {}, c = (f.geometry || {}).coordinates || [];
+      const partes = [p.name || [p.street, p.housenumber].filter(Boolean).join(' '), p.city, p.state, p.country].filter(Boolean);
+      return { lat: +(+c[1]).toFixed(5), lng: +(+c[0]).toFixed(5), nombre: partes[0] || t, txt: [...new Set(partes)].join(', ') };
+    });
+  }
   async function geocodificar(t) {
     const txt = encodeURIComponent(t);
     let fallo = null;
     try {
-      const j = await pedir('https://photon.komoot.io/api/?limit=5&q=' + txt);
-      const l = (j.features || []).map(f => {
-        const p = f.properties || {}, c = (f.geometry || {}).coordinates || [];
-        const partes = [p.name || [p.street, p.housenumber].filter(Boolean).join(' '), p.city, p.state, p.country].filter(Boolean);
-        return { lat: +(+c[1]).toFixed(5), lng: +(+c[0]).toFixed(5), nombre: partes[0] || t, txt: [...new Set(partes)].join(', ') };
-      });
+      const l = await conPhoton(t);
       if (l.length) return l;
     } catch (e) { fallo = e; }
     try {
@@ -1076,27 +1131,67 @@
       return l.map(x => ({ lat: +(+x.lat).toFixed(5), lng: +(+x.lon).toFixed(5), nombre: x.name || String(x.display_name || t).split(',')[0], txt: x.display_name || '' }));
     } catch (e) { if (fallo) throw e; return []; }
   }
+  /* Búsquedas recientes: las cinco últimas elegidas, guardadas solo en este dispositivo */
+  const CLAVE_REC = 'mis-viajes.busquedas';
+  function recientes() {
+    try { const l = JSON.parse(localStorage.getItem(CLAVE_REC) || '[]'); return Array.isArray(l) ? l.filter(x => x && isFinite(x.lat) && isFinite(x.lng)).slice(0, 5) : []; }
+    catch (e) { return []; }
+  }
+  function guardarReciente(x) {
+    const l = [{ nombre: x.nombre, txt: x.txt, lat: x.lat, lng: x.lng }].concat(recientes().filter(o => !(o.lat === x.lat && o.lng === x.lng))).slice(0, 5);
+    try { localStorage.setItem(CLAVE_REC, JSON.stringify(l)); } catch (e) { /* sin almacenamiento */ }
+  }
+  const filaRes = (x, i, icono) => '<button type="button" data-res="' + i + '">' + ico(icono) +
+    '<span><b>' + esc(x.nombre) + '</b><small>' + esc(x.txt) + '</small></span></button>';
+  function pintarHallados(lista) {
+    hallados = lista.filter(x => isFinite(x.lat) && isFinite(x.lng)).slice(0, 5);
+    res.innerHTML = hallados.length ? hallados.map((x, i) => filaRes(x, i, 'pin')).join('')
+      : '<p class="nota">Sin resultados. Prueba con más detalle: calle, ciudad, país.</p>';
+  }
+  function pintarRecientes() {
+    hallados = recientes();
+    res.innerHTML = hallados.length ? '<p class="nota m-res-t">Recientes<button type="button" data-res-borrar>Borrar</button></p>' +
+      hallados.map((x, i) => filaRes(x, i, 'reloj')).join('') : '';
+  }
+  /* Mientras se escribe: opciones tras una pausa corta; con menos de 3 letras, las recientes */
+  let tSug = 0;
+  q.addEventListener('input', () => {
+    clearTimeout(tSug);
+    const t = q.value.trim(), n = ++turno;
+    if (t.length < 3) { pintarRecientes(); return; }
+    tSug = setTimeout(async () => {
+      try {
+        const lista = await conPhoton(t);
+        if (n === turno && lista.length) pintarHallados(lista);
+      } catch (e) { /* sin conexión o servicio caído: se puede seguir escribiendo y pulsar Buscar */ }
+    }, 350);
+  });
   busca.addEventListener('submit', async e => {
     e.preventDefault();
+    clearTimeout(tSug);
     const t = q.value.trim(), n = ++turno;
     if (t.length < 3) { res.innerHTML = '<p class="nota">Escribe al menos 3 letras.</p>'; return; }
     res.innerHTML = '<p class="nota">Buscando…</p>';
     try {
       const lista = await geocodificar(t);
-      if (n !== turno) return;
-      hallados = lista.filter(x => isFinite(x.lat) && isFinite(x.lng)).slice(0, 5);
-      res.innerHTML = hallados.length ? hallados.map((x, i) => '<button type="button" data-res="' + i + '">' + ico('pin') +
-        '<span><b>' + esc(x.nombre) + '</b><small>' + esc(x.txt) + '</small></span></button>').join('')
-        : '<p class="nota">Sin resultados. Prueba con más detalle: calle, ciudad, país.</p>';
+      if (n === turno) pintarHallados(lista);
     } catch (er) {
       if (n === turno) res.innerHTML = '<p class="nota">No se pudo buscar ahora. Inténtalo otra vez en un momento.</p>';
     }
   });
   res.addEventListener('click', e => {
+    if (e.target.closest('[data-res-borrar]')) {
+      try { localStorage.removeItem(CLAVE_REC); } catch (er) { /* sin almacenamiento */ }
+      pintarRecientes();
+      q.focus();
+      return;
+    }
     const b = e.target.closest('[data-res]');
     if (!b) return;
+    const x = hallados[+b.dataset.res];
+    guardarReciente(x);
     cerrarBusca();
-    ponerPin(hallados[+b.dataset.res]);
+    ponerPin(x);
   });
   /* Un sitio marcado (buscado o con el dedo pulsado): guardarlo como recuerdo, agregarlo a un viaje o crear un viaje con él */
   /* La ventana de un sitio (buscado, marcado con el dedo o «estás aquí»): guardarlo como recuerdo, crear un viaje o agregarlo a uno */
@@ -1366,6 +1461,15 @@
       '<div class="h-pie">' + (v.nueva ? '' : '<button type="button" class="pill peligro" data-f="borrar"><span>Quitar viaje</span></button>') +
       '<button type="button" class="pill" data-f="cerrar">Cancelar</button><button type="submit" class="pill pri">Guardar</button></div></form>';
   }
+  /* Bloque de fotos de la ficha: las del viaje o, con un recuerdo elegido, solo las suyas */
+  function fotosFicha(v, tramo) {
+    const fs = tramo ? fotosDeTramo(v, tramo) : conFoto(v);
+    if (!fs.length) return '<a class="fi-sin" href="#v/' + v.id + '">' + ico('foto') + 'Sin fotos todavía · abrir el viaje</a>';
+    const mini = soloFav ? fs.filter(p => p.fav).concat(fs.filter(p => !p.fav)) : fs; /* en modo corazón, las favoritas primero */
+    return '<a class="fi-fotos" href="#v/' + v.id + '" aria-label="Ver las ' + fs.length + ' fotos de ' + esc(tramo || v.titulo) + ' y su mapa">' +
+      mini.slice(0, 4).map(p => '<span class="mini' + (p.fav ? ' fav' : '') + '"><img src="' + peq(p.f) + '" alt="" loading="lazy">' + BOLA + '</span>').join('') +
+      '<span class="fi-fotos-t">' + ico('foto') + plural(fs.length, 'foto', 'fotos') + (tramo ? ' · ' + esc(tramo) : ' y mapa') + '</span></a>';
+  }
   function ficha(v, num, total) {
     const fs = conFoto(v), n = dias(v), a = aFecha(v.desde), b = aFecha(v.hasta) || a;
     const lug = lugaresDe(v), adj = adjuntosDe(v);
@@ -1374,16 +1478,9 @@
       '<h3 class="fi-tit"><a href="#v/' + v.id + '">' + esc(v.titulo) + '</a></h3>' +
       '<div class="fi-fechas">' + ico('cal') + (a ? '<span class="fi-r"><small>Del</small><b>' + diaMes(a) + '</b><small>al</small><b>' + diaMes(b) + ' ' + b.getUTCFullYear() + '</b></span>' +
         '<span class="fi-d"><b>' + n + '</b><small>' + (n === 1 ? 'día' : 'días') + '</small></span>' : '<span class="fi-r"><small>Sin fechas todavía</small></span>') + '</div>' +
-      ovalos(lug.length ? lug : (v.lugar ? [v.lugar] : [])) +
+      ovalosFicha(v, lug.length ? lug : (v.lugar ? [v.lugar] : [])) +
       (v.texto ? '<p class="fi-txt">' + esc(v.texto) + '</p>' : '') + '<hr class="fi-hr">';
-    if (fs.length) {
-      const mini = soloFav ? fs.filter(p => p.fav).concat(fs.filter(p => !p.fav)) : fs; /* en modo corazón, las favoritas primero */
-      h += '<a class="fi-fotos" href="#v/' + v.id + '" aria-label="Ver las ' + fs.length + ' fotos de ' + esc(v.titulo) + ' y su mapa">' +
-        mini.slice(0, 4).map(p => '<span class="mini' + (p.fav ? ' fav' : '') + '"><img src="' + peq(p.f) + '" alt="" loading="lazy">' + BOLA + '</span>').join('') +
-        '<span class="fi-fotos-t">' + ico('foto') + plural(fs.length, 'foto', 'fotos') + ' y mapa</span></a>';
-    } else {
-      h += '<a class="fi-sin" href="#v/' + v.id + '">' + ico('foto') + 'Sin fotos todavía · abrir el viaje</a>';
-    }
+    h += fotosFicha(v, '');
     h += '<hr class="fi-hr"><div class="fi-adj">' + (adj.length ? adj.map((x, j) => adjuntoFila(v, x, j)).join('') : '<p class="fi-nof">Sin archivos adjuntos todavía</p>') + '</div>';
     if (editando) {
       h += '<div class="fi-bar"><button type="button" class="ib" data-adjuntar="' + v.id + '" aria-label="Adjuntar archivo a ' + esc(v.titulo) + '" title="Adjuntar archivo">' + ico('clip') + '</button>' +
@@ -2124,12 +2221,15 @@
     nombreNuevo = '';
     fechaNueva = '';
     const otros = p ? [rec].concat(ordenados()) : [], esRec = !!v.recuerdos;
+    const sug = !esRec && !x.tramo ? tramoSugerido(v, x, ed.pos) : '';
     mostrarHoja(
       '<form id="form-punto" novalidate>' + cabecera(esRec ? (p ? 'Editar recuerdo' : 'Nuevo recuerdo') : (p ? 'Editar punto' : 'Nuevo punto')) +
       (otros.length ? '<label class="campo">Dónde se guarda (cámbialo para pasarlo a un viaje o a Recuerdos)<select id="f-viaje">' +
         otros.map(o => '<option value="' + esc(o.id) + '"' + (o === v ? ' selected' : '') + '>' + esc(o.recuerdos ? 'Recuerdos (sin viaje)' : o.titulo) + '</option>').join('') +
         '<option value="__nuevo">Crear un viaje nuevo con él…</option></select></label>'
         : '<p class="nota">' + (esRec ? 'Se guarda en <b>Recuerdos</b>: un sitio suelto, sin viaje.' : 'Viaje: <b>' + esc(v.titulo) + '</b>') + '</p>') +
+      (!esRec && lugaresDe(v).length ? '<label class="campo">Recuerdo del viaje (a qué lugar pertenece)' + (sug ? ' · propuesto por cercanía o fecha' : '') + '<select id="f-tramo"><option value="">Ninguno</option>' +
+        lugaresDe(v).map(l => '<option value="' + esc(l) + '"' + (mismoTramo(x.tramo || sug, l) ? ' selected' : '') + '>' + esc(l) + (mismoTramo(sug, l) ? ' (propuesto)' : '') + '</option>').join('') + '</select></label>' : '') +
       '<label class="campo">Nombre<input id="f-nombre" type="text" maxlength="80" value="' + esc(x.nombre) + '" placeholder="Por ejemplo: Mirador de Santa Luzia"></label>' +
       '<label class="campo">Fecha<input id="f-pfecha" type="date" value="' + esc((x.fecha || '').slice(0, 10)) + '"></label>' +
       '<label class="campo">Comentario<textarea id="f-ptxt" rows="2" maxlength="500" placeholder="Qué pasó aquí">' + esc(x.txt) + '</textarea></label>' +
@@ -2178,6 +2278,8 @@
     }
     const prevFecha = p.fecha || '';
     if (nombre) p.nombre = nombre; else delete p.nombre;
+    const selTramo = $('#f-tramo', caja); /* solo existe en las fotos de un viaje con itinerario */
+    if (selTramo) { if (selTramo.value) p.tramo = selTramo.value; else delete p.tramo; }
     if (txt) p.txt = txt; else delete p.txt;
     if (fecha) p.fecha = fecha.length === 10 && prevFecha.slice(0, 10) === fecha ? prevFecha : fecha; else delete p.fecha;
     if (ed.pos) { p.lat = ed.pos.lat; p.lng = ed.pos.lng; } else { delete p.lat; delete p.lng; }
@@ -2394,6 +2496,16 @@
     }
     const dot = t.closest('[data-ir]');
     if (dot) { const f = $('.pista', panel).children[+dot.dataset.ir]; if (f) enfocarFicha(f); return; }
+    const tr = t.closest('[data-tramo]');
+    if (tr) {
+      const art = tr.closest('.fi'), v = art && porId(art.dataset.id), on = tr.getAttribute('aria-pressed') !== 'true';
+      if (!v) return;
+      soltarTramo();
+      if (on) { tramoMapa = { id: v.id, nombre: tr.dataset.tramo }; ponTramo(art, v, tramoMapa.nombre); }
+      seguir = true;
+      mapaViaje(v, true); /* la burbuja y el mapa enseñan lo mismo */
+      return;
+    }
     const mod = t.closest('[data-modificar]');
     if (mod) { ir('#ficha/' + mod.dataset.modificar, false, { capa: true }); return; }
     if (t.closest('[data-nuevo-viaje]')) { nuevoViaje(); return; }

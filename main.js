@@ -254,7 +254,7 @@
 
   /* ===================== Mapa (Leaflet) ===================== */
   function crearMapa(el) {
-    const map = L.map(el, { zoomControl: false, worldCopyJump: true, minZoom: 2, maxZoom: 19, zoomSnap: 0.5, tapTolerance: 15 });
+    const map = L.map(el, { zoomControl: false, worldCopyJump: true, minZoom: 2, maxZoom: 21, zoomSnap: 0.5, tapTolerance: 15 });
     map.setView([25, -20], 2);
     map.attributionControl.setPrefix('Autor: <a href="https://github.com/jfolivarl" target="_blank" rel="noopener"><b>Juan Felipe Olivar Londoño</b></a> · <a href="https://leafletjs.com" target="_blank" rel="noopener">Leaflet</a>');
     const OSM = '© <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">OpenStreetMap</a>';
@@ -262,26 +262,68 @@
     const ESRI = 'https://server.arcgisonline.com/ArcGIS/rest/services/';
     const gris = (estilo, clase) => L.layerGroup([
       L.tileLayer(ESRI + 'Canvas/World_' + estilo + '_Gray_Base/MapServer/tile/{z}/{y}/{x}', {
-        maxNativeZoom: 16, maxZoom: 19, className: clase || '',
+        maxNativeZoom: 16, maxZoom: 21, className: clase || '',
         attribution: '© <a href="https://www.esri.com" target="_blank" rel="noopener">Esri</a>, HERE, Garmin · ' + OSM
       }),
-      L.tileLayer(ESRI + 'Canvas/World_' + estilo + '_Gray_Reference/MapServer/tile/{z}/{y}/{x}', { maxNativeZoom: 16, maxZoom: 19, className: clase || '' })
+      L.tileLayer(ESRI + 'Canvas/World_' + estilo + '_Gray_Reference/MapServer/tile/{z}/{y}/{x}', { maxNativeZoom: 16, maxZoom: 21, className: clase || '' })
     ]);
+    /* Relieve «estirado»: el detalle de Esri no es igual en todo el mundo. Donde no hay imagen a este zoom,
+       se busca el nivel más cercano que sí la tiene y se amplía, para poder acercarse lo mismo en cualquier sitio. */
+    const Estirada = L.GridLayer.extend({
+      initialize(base, opts) { this._base = base; this._tm = {}; L.setOptions(this, opts); },
+      /* ¿existe esta tesela? true / false; null si no se pudo preguntar */
+      _hay(z, x, y) {
+        if (z <= 12) return Promise.resolve(true);
+        const bx = x - x % 8, by = y - y % 8, k = z + '/' + by + '/' + bx;
+        if (!this._tm[k]) this._tm[k] = fetch(this._base + '/tilemap/' + k + '/8/8?f=json').then(r => r.json()).catch(() => null);
+        return this._tm[k].then(j => {
+          if (!j) return null;
+          if (j.error || !j.data || !j.location) return false;
+          const l = j.location, c = x - l.left, f = y - l.top;
+          return c >= 0 && f >= 0 && c < l.width && f < l.height ? !!j.data[f * l.width + c] : false;
+        });
+      },
+      /* cuántos niveles hay que subir hasta encontrar imagen */
+      async _sube(c) {
+        const tope = Math.max(0, c.z - 19);
+        for (let d = 0; d <= 9 && c.z - d >= 2; d++) {
+          const h = await this._hay(c.z - d, c.x >> d, c.y >> d);
+          if (h === null) return tope;
+          if (h) return d;
+        }
+        return tope;
+      },
+      createTile(c, hecho) {
+        const t = document.createElement('div'), img = new Image(), s = this.getTileSize();
+        t.style.overflow = 'hidden';
+        img.alt = '';
+        img.setAttribute('role', 'presentation');
+        t.appendChild(img);
+        this._sube(c).then(d => {
+          const n = 1 << d;
+          img.style.cssText = 'position:absolute;max-width:none;width:' + s.x * n + 'px;height:' + s.y * n + 'px;left:' + -(c.x % n) * s.x + 'px;top:' + -(c.y % n) * s.y + 'px';
+          img.onload = () => hecho(null, t);
+          img.onerror = e => hecho(e, t);
+          img.src = this._base + '/tile/' + (c.z - d) + '/' + (c.y >> d) + '/' + (c.x >> d);
+        });
+        return t;
+      }
+    });
     const capas = {
       azul: gris('Dark', 'capa-azul'), /* el gris oscuro teñido con el azul de la app */
       oscuro: gris('Dark'),
       claro: gris('Light'),
-      calle: L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 19, attribution: OSM }),
-      relieve: L.tileLayer(ESRI + 'World_Topo_Map/MapServer/tile/{z}/{y}/{x}', {
-        maxZoom: 19,
+      calle: L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', { maxNativeZoom: 19, maxZoom: 21, attribution: OSM }),
+      relieve: new Estirada(ESRI + 'World_Topo_Map/MapServer', {
+        maxZoom: 21,
         attribution: '© <a href="https://www.esri.com" target="_blank" rel="noopener">Esri</a>, HERE, Garmin, USGS · ' + OSM
       }),
       satelite: L.layerGroup([
         L.tileLayer(ESRI + 'World_Imagery/MapServer/tile/{z}/{y}/{x}', {
-          maxZoom: 19,
+          maxNativeZoom: 19, maxZoom: 21,
           attribution: 'Imágenes © <a href="https://www.esri.com" target="_blank" rel="noopener">Esri</a>, Maxar, Earthstar Geographics'
         }),
-        L.tileLayer(ESRI + 'Reference/World_Boundaries_and_Places/MapServer/tile/{z}/{y}/{x}', { maxZoom: 19 })
+        L.tileLayer(ESRI + 'Reference/World_Boundaries_and_Places/MapServer/tile/{z}/{y}/{x}', { maxNativeZoom: 19, maxZoom: 21 })
       ])
     };
     const NOMBRES = { azul: 'Azul', oscuro: 'Gris oscuro', claro: 'Gris claro', calle: 'Callejero', relieve: 'Relieve', satelite: 'Satélite' };

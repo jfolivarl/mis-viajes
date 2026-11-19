@@ -287,8 +287,10 @@ img{max-width:100%}
 .m-norte{color:#6b7785}
 .base-osc .m-norte{color:#aab6c2}
 .base-osc .leaflet-control-scale-line{border-color:#aab6c2;color:#aab6c2}
-.m-logo{display:none}
-.full .m-logo{display:block;position:absolute;right:10px;bottom:calc(30px + env(safe-area-inset-bottom,0px));z-index:1000;width:72px;height:72px;padding:0;border:0;border-radius:50%;background:none;cursor:pointer}
+/* Logo en el mapa: en tableta, escritorio y tele siempre; en el móvil, solo a pantalla completa */
+.m-logo{display:none;position:absolute;right:10px;bottom:calc(30px + env(safe-area-inset-bottom,0px));z-index:1000;width:72px;height:72px;padding:0;border:0;border-radius:50%;background:none;cursor:pointer}
+.full .m-logo{display:block}
+@media (min-width:768px){.m-logo{display:block}}
 .m-logo img{display:block;width:100%;height:100%;border-radius:50%}
 .m-norte .ic{display:block;width:22px;height:22px;stroke-width:1.1}
 .m-norte .lleno{fill:currentColor}
@@ -337,8 +339,6 @@ img{max-width:100%}
 .sw{display:inline-grid;place-items:center;flex:none;width:22px;height:22px;border-radius:50%;border:1px solid #fff}
 .sw i{width:7px;height:7px;border-radius:50%;background:transparent}
 .sw[data-b="azul"]{background:#1a2b3d}
-.sw[data-b="oscuro"]{background:#2a2a2a}
-.sw[data-b="oscuro"] i{background:#5a5a5a}
 .sw[data-b="claro"]{background:#d9d9d9;border-color:#eceff3}
 .sw[data-b="claro"] i{background:#a9a9a9}
 .sw[data-b="calle"]{background:#f2efe9}
@@ -503,7 +503,7 @@ textarea{resize:vertical}
 .full .top,.full .aviso,.full .panel{visibility:hidden}
 .full .mapa-wrap{background:var(--mar)}
 /* con var() el respaldo no funciona solo: svh únicamente donde se entiende */
-@supports (height:1svh){.mapa-wrap{height:var(--alto,50svh)}}
+@supports (height:1svh){@media (max-width:899px){.mapa-wrap{height:var(--alto,50svh)}}} /* solo en móvil: en pantallas anchas el mapa ocupa todo el alto */
 
 /* Botones redondos y marcadores: el anillo de foco sigue su forma (en navegadores antiguos el outline sale cuadrado) */
 .m-ctrl button:focus,.pill:focus,.ib:focus,.tab:focus,.ovalos button:focus,.v-btn:focus,.czb:focus,.m-logo:focus,.leaflet-marker-icon:focus{outline:none;box-shadow:0 0 0 2px var(--bg),0 0 0 4px var(--tturq)}
@@ -514,3 +514,27 @@ textarea{resize:vertical}
 .m-pin:focus svg path{stroke:var(--tturq);stroke-width:3}
 /* Botón encendido con el puntero encima (tele con cursor): sigue viéndose encendido */
 .m-ctrl button[aria-pressed="true"]:hover,.m-ctrl button[aria-expanded="true"]:hover,.pill[aria-pressed="true"]:hover{background:var(--acento);color:#fff}
+
+/* Fila del viaje (o recuerdo) que el mapa tiene delante: mismo borde turquesa que lo elegido en el resto de la app */
+.lista .aqui{border-color:var(--tturq);box-shadow:inset 0 0 0 1px var(--tturq)}
+
+
+
+/* Capa de números: caja del mismo tamaño que el círculo, transparente, con el número en su esquina */
+.m-capa-n{background:none;border:0;pointer-events:none!important}
+.m-capa-n .m-n{pointer-events:auto;cursor:pointer;box-shadow:0 0 0 2px var(--bg)}
+
+/* Visor: número del viaje, con el mismo círculo que el número del embudo */
+.v-cont{display:flex;align-items:center;gap:.45rem}
+.v-num{flex:none;display:inline-grid;place-items:center;min-width:19px;height:19px;padding:0 4px;border-radius:999px;border:1.5px solid #fff;background:var(--surface);color:var(--titulo);font-size:.68rem;font-weight:700;line-height:1}
+.v-cont-t{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+/* Las ventanas reciben el foco al abrirse, sin marco: el marco solo para lo que se puede pulsar */
+.visor:focus,.hoja:focus{outline:none;box-shadow:none}
+/* Tras tocar o usar el ratón no se dibuja ningún anillo de foco; con teclado o mando, sí */
+html.puntero :focus{outline:none}
+html.puntero .m-ctrl button:focus,html.puntero .pill:focus,html.puntero .ib:focus,html.puntero .tab:focus,html.puntero .ovalos button:focus,html.puntero .v-btn:focus,html.puntero .czb:focus,html.puntero .m-logo:focus,html.puntero .leaflet-marker-icon:focus{box-shadow:none}
+/* Al quitar el anillo, cada control recupera su sombra propia (los botones del mapa, su sombra; la pestaña activa, su borde) */
+html.puntero .m-ctrl button:focus{box-shadow:var(--sombra)}
+.m-ctrl button:focus:not(:focus-visible){box-shadow:var(--sombra)}
+html.puntero .tab[aria-current="page"]:focus{box-shadow:inset 0 0 0 1px var(--acento)}
+.tab[aria-current="page"]:focus:not(:focus-visible){box-shadow:inset 0 0 0 1px var(--acento)}

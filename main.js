@@ -8,10 +8,17 @@
   'use strict';
   /* Pantallas muy anchas (teles 4K que se anuncian con 3840 px): se amplía todo para que se lea como en 1920.
      Teles y ordenadores normales (hasta 2559 px) se quedan tal cual. */
+  /* Anillo de foco solo para teclado y mando: tras tocar o pulsar con el ratón, ningún botón se queda iluminado
+     (ni la X de una ventana recién abierta, ni el botón al que vuelve el foco al cerrarla) */
+  const raiz = document.documentElement;
+  ['pointerdown', 'touchstart'].forEach(ev => window.addEventListener(ev, () => raiz.classList.add('puntero'), { passive: true, capture: true }));
+  window.addEventListener('keydown', e => { if (!e.metaKey && !e.ctrlKey && !e.altKey) raiz.classList.remove('puntero'); }, true);
   function escalaPantalla() {
     const w = window.innerWidth * (parseFloat(document.documentElement.style.zoom) || 1);
     const f = w >= 2560 ? Math.min(2, w / 1920) : 1;
     document.documentElement.style.zoom = f === 1 ? '' : f.toFixed(3);
+    /* con la página ampliada, su alto tiene que ser el de la pantalla dividido entre el aumento (si no, se sale por abajo) */
+    if (document.body) { if (f === 1) document.body.style.removeProperty('height'); else document.body.style.height = (window.innerHeight / f).toFixed(1) + 'px'; }
   }
   escalaPantalla();
   window.addEventListener('resize', escalaPantalla);
@@ -368,7 +375,6 @@
     });
     const capas = {
       azul: gris('Dark', 'capa-azul'), /* el gris oscuro teñido con el azul de la app */
-      oscuro: gris('Dark'),
       claro: gris('Light'),
       calle: L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', { maxNativeZoom: 19, maxZoom: 21, attribution: OSM }),
       relieve: new Estirada(ESRI + 'World_Topo_Map/MapServer', {
@@ -383,14 +389,14 @@
         L.tileLayer(ESRI + 'Reference/World_Boundaries_and_Places/MapServer/tile/{z}/{y}/{x}', { maxNativeZoom: 19, maxZoom: 21 })
       ])
     };
-    const NOMBRES = { azul: 'Azul', oscuro: 'Gris oscuro', claro: 'Gris claro', calle: 'Callejero', relieve: 'Relieve', satelite: 'Satélite' };
-    let base = 'azul'; /* el fondo azul combina con la app y no compite con las fotos */
-    try { const g = localStorage.getItem('mis-viajes.base'); if (capas[g]) base = g; } catch (e) { /* sin almacenamiento */ }
+    const NOMBRES = { azul: 'Azul', claro: 'Gris claro', calle: 'Callejero', relieve: 'Relieve', satelite: 'Satélite' };
+    /* al abrir la app, siempre el relieve; durante la visita se puede cambiar de capa */
+    let base = 'relieve';
     const ponerBase = k => {
       if (capas[base]) map.removeLayer(capas[base]);
       base = k;
       capas[base].addTo(map);
-      el.classList.toggle('base-osc', base === 'azul' || base === 'oscuro' || base === 'satelite');
+      el.classList.toggle('base-osc', base === 'azul' || base === 'satelite');
       const sw = el.querySelector('[data-m="capa"] .sw');
       if (sw) sw.dataset.b = base;
       try { localStorage.setItem('mis-viajes.base', base); } catch (e) { /* sin almacenamiento */ }
@@ -426,26 +432,32 @@
     norte.addTo(map);
     /* Retícula de fondo: se ve mientras carga el mapa base o si no hay conexión */
     map.createPane('red').style.zIndex = 150;
+    /* Los números de fotos van en su propia capa, por encima de todos los círculos: ningún círculo los tapa */
+    const capaNum = map.createPane('numeros');
+    capaNum.style.zIndex = 650;
+    capaNum.style.pointerEvents = 'none';
     const lineas = [];
     for (let ln = -540; ln <= 540; ln += 30) lineas.push([[-85, ln], [85, ln]]);
     for (let la = -60; la <= 60; la += 30) lineas.push([[la, -540], [la, 540]]);
     L.polyline(lineas, { pane: 'red', weight: 1, interactive: false, className: 'm-red' }).addTo(map);
 
-    let puntos = [], fabrica = null, tocar = null, mover = null, resalte = null, linea = null;
+    let puntos = [], fabrica = null, tocar = null, mover = null, resalte = null, lineas2 = [];
     const grupo = L.layerGroup().addTo(map);
     let pin = null, yo = null, yoAcc = null;
 
     /* La línea de la ruta solo une círculos que se ven: si un punto se junta con otro en un cúmulo, su tramo desaparece */
-    let rutaDatos = null, sitio = {};
+    let rutaDatos = [], sitio = {};
     function dibujaRuta() {
-      if (linea) { linea.remove(); linea = null; }
-      if (!rutaDatos) return;
-      const l = [];
-      rutaDatos.forEach(q => {
-        const c = sitio[q[0] + ',' + q[1]], u = l[l.length - 1];
-        if (c && !(u && u[0] === c[0] && u[1] === c[1])) l.push(c);
+      lineas2.forEach(l => l.remove());
+      lineas2 = [];
+      rutaDatos.forEach(datos => {
+        const l = [];
+        datos.forEach(q => {
+          const c = sitio[q[0] + ',' + q[1]], u = l[l.length - 1];
+          if (c && !(u && u[0] === c[0] && u[1] === c[1])) l.push(c);
+        });
+        if (l.length > 1) lineas2.push(L.polyline(l, { color: '#D6AD55', weight: 3, dashArray: '2 8', lineCap: 'round', interactive: false }).addTo(map));
       });
-      if (l.length > 1) linea = L.polyline(l, { color: '#D6AD55', weight: 3, dashArray: '2 8', lineCap: 'round', interactive: false }).addTo(map);
     }
     function pintarMarcas() {
       grupo.clearLayers();
@@ -453,16 +465,23 @@
       const z = map.getZoom(), R = 40, grupos = [];
       puntos.forEach(p => {
         const q = map.project([p.lat, p.lng], z);
-        const g = grupos.find(o => Math.abs(o.x - q.x) < R && Math.abs(o.y - q.y) < R);
-        if (g) g.items.push(p); else grupos.push({ x: q.x, y: q.y, items: [p] });
+        /* las fotos de un recuerdo abierto solo se juntan con las de su mismo recuerdo: mientras se tocan forman
+           un círculo con su número de fotos, y al acercarse se van separando hasta quedar cada una en su sitio */
+        const g = grupos.find(o => (p.suelto ? o.suelto && o.rk === p.rk : !o.suelto) && Math.abs(o.x - q.x) < R && Math.abs(o.y - q.y) < R);
+        if (g) g.items.push(p); else grupos.push({ x: q.x, y: q.y, items: [p], suelto: !!p.suelto, rk: p.rk });
       });
       sitio = {};
       grupos.forEach(g => g.items.forEach(i => { sitio[i.lat + ',' + i.lng] = [g.items[0].lat, g.items[0].lng]; }));
       dibujaRuta();
       grupos.forEach(g => {
         const p = g.items[0], solo = g.items.length === 1, f = fabrica(g.items), arrastra = !!(mover && solo && f.mov !== false);
+        /* el número sale del círculo y se pinta en la capa de números, en el mismo sitio */
+        const num = /<span class="m-n">([^<]*)<\/span>/.exec(f.html);
+        if (num) L.marker([p.lat, p.lng], { pane: 'numeros', keyboard: false,
+          icon: L.divIcon({ className: 'm-capa-n', html: '<span class="m-n" aria-hidden="true">' + num[1] + '</span>', iconSize: [f.tam, f.tam] }) })
+          .on('click', () => { if (tocar) tocar(g.items); }).addTo(grupo); /* tocar el número es como tocar su círculo */
         const m = L.marker([p.lat, p.lng], {
-          icon: L.divIcon({ className: 'm-m ' + f.clase + (arrastra ? ' mov' : ''), html: f.html, iconSize: [f.tam, f.tam] }),
+          icon: L.divIcon({ className: 'm-m ' + f.clase + (arrastra ? ' mov' : ''), html: num ? f.html.replace(num[0], '') : f.html, iconSize: [f.tam, f.tam] }),
           draggable: arrastra, keyboard: true, riseOnHover: true, autoPanOnFocus: false
         });
         m.ids = g.items.map(i => i.id);
@@ -479,6 +498,12 @@
       });
       api.resaltar(resalte);
     }
+    map.on('zoomend', () => { if (api.alZoom) api.alZoom(map.getZoom()); });
+    /* Movimiento hecho por la persona (arrastrar, pellizcar, rueda, + y -): avisa al terminar, para que las listas la sigan */
+    let tUsr = 0;
+    const usr = () => { tUsr = Date.now(); };
+    ['pointerdown', 'touchstart', 'wheel'].forEach(ev => el.addEventListener(ev, usr, { passive: true }));
+    map.on('moveend', () => { if (api.alMover && Date.now() - tUsr < 2500) api.alMover(); });
     map.on('zoomend', pintarMarcas);
     /* Mantener el dedo pulsado (o clic derecho) marca un sitio */
     map.on('contextmenu', e => { if (api.alMarcar) api.alMarcar(e.latlng.wrap()); });
@@ -509,6 +534,8 @@
 
     const api = {
       verTodo: null,
+      alZoom: null,
+      alMover: null,
       alTodo: null,
       alMarcar: null,
       alYo: null,
@@ -548,13 +575,23 @@
         puntos = lista; fabrica = fab; tocar = toc; mover = mov || null;
         pintarMarcas();
       },
-      ruta(lista) {
-        rutaDatos = lista && lista.length > 1 ? lista : null;
+      ruta(lista) { api.rutas(lista ? [lista] : []); },
+      /* distancia en píxeles de un punto al centro de la pantalla */
+      alCentro(o) {
+        const z = map.getZoom(), a = map.project([o.lat, o.lng], z), c = map.project(map.getCenter(), z);
+        return Math.hypot(a.x - c.x, a.y - c.y);
+      },
+      /* ¿se ve en pantalla? (con un pequeño margen hacia dentro) */
+      seVe: o => map.getBounds().pad(-0.04).contains([o.lat, o.lng]),
+      /* varias rutas a la vez: cada una une solo los círculos que se ven */
+      rutas(listas) {
+        rutaDatos = (listas || []).filter(l => l && l.length > 1);
         dibujaRuta();
       },
       resaltar(id) {
         resalte = id;
-        grupo.eachLayer(m => { const e = m.getElement(); if (e) e.classList.toggle('on', id != null && m.ids.indexOf(id) >= 0); });
+        /* solo los círculos (los números de la capa de arriba no llevan fotos propias) */
+        grupo.eachLayer(m => { const e = m.ids && m.getElement(); if (e) e.classList.toggle('on', id != null && m.ids.indexOf(id) >= 0); });
       },
       ventana(la, ln, html) {
         L.popup({ maxWidth: 260, className: 'm-pop', autoPanPaddingTopLeft: [60, 16], autoPanPaddingBottomRight: [62, 50] }).setLatLng([la, ln]).setContent(html).openOn(map);
@@ -969,27 +1006,94 @@
   }
 
   /* ---------- Mapa: todos los viajes o uno ---------- */
-  function mapaTodos(lista, tocar, fav, soloRec) {
-    enMapa = null;
-    const pts = [];
-    if (!soloRec) lista.forEach(v => {
-      const p = posicion(v);
-      if (p && !fav) pts.push({ id: v.id, lat: p.lat, lng: p.lng, v });
-      if (fav) ubicados(v).filter(o => o.fav && o.f).forEach(o => pts.push({ id: v.id + '/' + o.id, lat: o.lat, lng: o.lng, v, p: o }));
+  /* ---------- Mapa general: la unidad es el recuerdo ----------
+     Cada recuerdo (un lugar del itinerario con fotos; o el viaje entero si no tiene recuerdos) es un círculo con su
+     foto y su número de fotos. Al ampliar un poco se abre: cada foto en su sitio real, unidas por su línea, aunque
+     se solapen. Al alejarse se vuelven a juntar en el recuerdo. El número cuenta siempre fotos. */
+  /* Un recuerdo se abre en sus fotos a partir de este zoom (unos 20 km). Al elegir un viaje, el mapa se queda
+     un paso antes, con sus recuerdos cerrados y su número de fotos; a poco que se amplía, se abren. */
+  const ZOOM_ABRE = 9;
+  function recuerdosMapa(lista) {
+    const out = [];
+    lista.forEach(v => {
+      const ub = ubicados(v), lug = lugaresDe(v), usados = new Set();
+      lug.forEach(nombre => {
+        const fs = ub.filter(o => mismoTramo(o.tramo, nombre));
+        if (!fs.length) return;
+        fs.forEach(o => usados.add(o));
+        out.push({ v, nombre, fotos: fs });
+      });
+      const resto = ub.filter(o => !usados.has(o)), pos = posicion(v);
+      if (resto.length) out.push({ v, nombre: lug.length ? '' : (v.lugar || v.titulo), fotos: resto });
+      else if (!ub.length && pos) out.push({ v, nombre: v.lugar || v.titulo, fotos: [], pos });
     });
-    puntosRec().forEach(o => pts.push(o));
-    mapa.ruta(null);
+    out.forEach((r, i) => {
+      r.k = r.v.id + '|' + i;
+      const fs = r.fotos;
+      r.lat = fs.length ? fs.reduce((t, o) => t + o.lat, 0) / fs.length : r.pos.lat;
+      r.lng = fs.length ? fs.reduce((t, o) => t + o.lng, 0) / fs.length : r.pos.lng;
+      r.foto = (fs.find(o => o.f) || {}).f || portada(r.v);
+    });
+    return out;
+  }
+  /* Círculo del mapa general: un recuerdo, una foto suelta o varios recuerdos juntos (con su número) */
+  /* El número de un círculo cuenta siempre las fotos que lleva dentro */
+  const fotosItem = i => i.rc ? i.rc.fotos.length : i.v === rec ? Math.max(1, fotosDe(i.p).length) : 1;
+  function marcaGeneral(items) {
+    const a = items[0];
+    if (a.v === rec && items.length === 1) return marcaRecuerdo(items);
+    const recuerdos = new Set(items.map(i => i.rk)).size, n = items.reduce((t, i) => t + fotosItem(i), 0);
+    const foto = a.rc ? a.rc.foto : a.p && a.p.f;
+    const titulo = recuerdos > 1 ? plural(n, 'foto', 'fotos') + ' de ' + recuerdos + ' recuerdos'
+      : items.length > 1 ? plural(n, 'foto', 'fotos') + ' juntas · ' + a.v.titulo
+      : a.rc ? (a.rc.nombre ? a.rc.nombre + ' · ' : '') + a.v.titulo + (a.rc.fotos.length ? ' · ' + plural(a.rc.fotos.length, 'foto', 'fotos') : '')
+      : a.v === rec ? 'Recuerdo: ' + nombrePunto(a.p) : nombrePunto(a.p) + ' · ' + a.v.titulo;
+    return { clase: a.rc || recuerdos > 1 ? 'm-v' : a.p.f ? 'm-f' : 'm-l', tam: a.rc || recuerdos > 1 ? 44 : 38, mov: false, titulo,
+      html: (foto ? '<img src="' + peq(foto) + '" alt="">' : ico('pin')) + (n > 1 ? '<span class="m-n">' + n + '</span>' : '') };
+  }
+  let generalOn = false;
+  /* Al abrir la app el mapa enseña todos los viajes; deja de hacerlo en cuanto la persona toca el panel */
+  let arranque = true;
+  ['pointerdown', 'touchstart', 'wheel', 'keydown'].forEach(ev => $('#panel').addEventListener(ev, () => { arranque = false; }, { passive: true, once: true }));
+  function mapaTodos(lista, tocar, fav, soloRec, sinEncuadre) {
+    enMapa = null;
+    generalOn = !fav && !soloRec;
     mapa.cerrarVentana();
     mapa.filtrado(null);
     const esRec = it => it.v === rec;
-    mapa.marcas(pts, items => esRec(items[0]) ? marcaRecuerdo(items) : Object.assign(items[0].p ? marcaPunto(items) : marcaViaje(items), { mov: false }), grupo => {
-      if (grupo.length > 1 && mapa.zoom() <= 15) mapa.ajustar(grupo, 16);
-      else if (esRec(grupo[0])) tocarRecuerdo(grupo[0].p);
-      else if (grupo[0].p) abrirFoto(grupo[0].v, grupo[0].p.id);
-      else tocar(grupo[0].v);
-    }, editando ? (o, pos) => { o.p.lat = pos.lat; o.p.lng = pos.lng; guardar(); toast('Recuerdo movido'); } : null); /* solo los recuerdos se arrastran aquí */
-    mapa.verTodo = () => { if (pts.length) mapa.ajustar(pts, 6); else mapa.volar(25, -20, 2); };
-    mapa.verTodo();
+    const general = !fav && !soloRec, recs = general ? recuerdosMapa(lista) : [];
+    const pinta = () => {
+      const pts = [], rutas = [];
+      if (general) recs.forEach(r => {
+        if (r.fotos.length && mapa.zoom() >= ZOOM_ABRE) {
+          r.fotos.forEach(o => pts.push({ id: r.v.id + '/' + o.id, lat: o.lat, lng: o.lng, v: r.v, p: o, rk: r.k, suelto: true }));
+          rutas.push(r.fotos.map(o => [o.lat, o.lng]));
+        } else pts.push({ id: 'rc/' + r.k, lat: r.lat, lng: r.lng, v: r.v, rc: r, rk: r.k });
+      });
+      else if (!soloRec) lista.forEach(v => ubicados(v).filter(o => o.fav && o.f).forEach(o => pts.push({ id: v.id + '/' + o.id, lat: o.lat, lng: o.lng, v, p: o })));
+      puntosRec().forEach(o => pts.push(Object.assign(o, { rk: o.id })));
+      mapa.rutas(rutas);
+      mapa.marcas(pts, general ? marcaGeneral : items => esRec(items[0]) ? marcaRecuerdo(items) : Object.assign(marcaPunto(items), { mov: false }), grupo => {
+        const a = grupo[0];
+        if (!a.rc && a.p && grupo.length > 1 && mapa.zoom() >= 18) { abrirFoto(a.v, a.p.id); return; }
+        if (new Set(grupo.map(i => i.rk)).size > 1 || (!a.rc && grupo.length > 1)) {
+          /* varios recuerdos juntos: acercarse a todo lo que contienen */
+          mapa.ajustar(grupo.flatMap(i => i.rc && i.rc.fotos.length ? i.rc.fotos : [i]), 17);
+        } else if (a.rc) {
+          /* un recuerdo: sin fotos abre su viaje; con una, la foto; con varias, se acerca hasta que se abren */
+          if (!a.rc.fotos.length) tocar(a.v);
+          else if (a.rc.fotos.length === 1) abrirFoto(a.v, a.rc.fotos[0].id);
+          else mapa.ajustar(a.rc.fotos, 17);
+        } else if (esRec(a)) tocarRecuerdo(a.p);
+        else if (a.p.f) abrirFoto(a.v, a.p.id);
+        else ventanaPunto(a.v, a.p);
+      }, editando ? (o, pos) => { if (!esRec(o)) return; o.p.lat = pos.lat; o.p.lng = pos.lng; guardar(); toast('Recuerdo movido'); } : null); /* solo los recuerdos sueltos se arrastran aquí */
+    };
+    mapa.alZoom = pinta;
+    pinta();
+    const todos = general ? recs.concat(puntosRec()) : lista.flatMap(v => ubicados(v).filter(o => o.fav && o.f)).concat(puntosRec());
+    mapa.verTodo = () => { if (todos.length) mapa.ajustar(todos, 6); else mapa.volar(25, -20, 2); };
+    if (!sinEncuadre) mapa.verTodo();
   }
   function ventanaPunto(v, p) {
     mapa.ventana(p.lat, p.lng, '<b>' + esc(nombrePunto(p)) + '</b>' + (p.fecha ? '<br><small>' + fechaTxt(p.fecha) + '</small>' : '') +
@@ -1013,9 +1117,26 @@
     if (caja && v) ponTramo(caja, v, '');
   }
   function mapaViaje(v, ajustar) {
-    enMapa = v.id;
     if (tramoMapa && tramoMapa.id !== v.id) soltarTramo();
     const delTramo = tramoMapa ? fotosDeTramo(v, tramoMapa.nombre) : null;
+    if (!editando && !soloFav) {
+      /* Mapa único: todo sigue a la vista; elegir un viaje (o un recuerdo suyo) solo lleva la cámara allí */
+      mapaTodos(datos, tocarViaje, false, false, true);
+      enMapa = v.id;
+      mapa.filtrado(v.titulo, numeros().get(v.id));
+      const ub = ubicados(v).filter(o => !delTramo || delTramo.includes(o)), p = posicion(v);
+      /* lo bastante cerca para que sus recuerdos se vean por separado (con una sola foto, un poco más lejos) */
+      mapa.verTodo = () => {
+        if (delTramo && ub.length) mapa.ajustar(ub, 17);
+        else if (ub.length) mapa.ajustar(recuerdosMapa([v]), ZOOM_ABRE - 1);
+        else if (p) mapa.ajustar([p], ZOOM_ABRE - 1);
+      };
+      if (ajustar) mapa.verTodo();
+      return;
+    }
+    generalOn = false;
+    mapa.alZoom = null;
+    enMapa = v.id;
     const todos = ubicados(v).filter(o => !delTramo || delTramo.includes(o)), favs = todos.filter(o => o.fav), p = posicion(v);
     const g = soloFav ? favs : todos; /* en modo corazón, solo las favoritas */
     mapa.cerrarVentana();
@@ -1063,9 +1184,51 @@
     if (viajeActual) ir(HASH[tab]);
     else if (habiaAnio) pintarPanel('inicio', null);
     seguir = false;
-    mapaTodos(tab === 'viajes' ? datos : visFotos(), tocarViaje, soloFav, tab === 'rec');
+    if (soloFav) mapaTodos(tab === 'viajes' ? datos : visFotos(), tocarViaje, soloFav, tab === 'rec');
+    else mapaTodos(datos, tocarViaje, false);
   }
   mapa.alTodo = verTodosViajes;
+  /* Al mover el mapa con los dedos, el viaje (o recuerdo suelto) más cerca del centro pasa a ser el actual:
+     el embudo lo nombra y la ficha o la fila de la lista lo acompañan. De muy lejos no se cambia nada. */
+  let desdeMapa = null; /* ficha a la que acaba de llevar el mapa: su deslizamiento no debe volver a mover el mapa */
+  /* en cuanto la persona toca la lista, manda ella */
+  ['pointerdown', 'touchstart', 'wheel', 'keydown'].forEach(ev => $('#panel').addEventListener(ev, () => { desdeMapa = null; }, { passive: true }));
+  mapa.alMover = () => {
+    if (!generalOn || soloFav || editando || mapa.zoom() < 5) return;
+    /* el recuerdo visible más cercano al centro de la pantalla; si no se ve ninguno, no cambia nada */
+    const cand = recuerdosMapa(datos).filter(mapa.seVe).map(r => ({ v: r.v, d: mapa.alCentro(r) }))
+      .concat(puntosRec().filter(mapa.seVe).map(o => ({ v: rec, p: o.p, d: mapa.alCentro(o) })));
+    const m = cand.sort((a, b) => a.d - b.d)[0];
+    if (!m) return;
+    const v = m.v;
+    if (v !== rec && v.id !== enMapa) {
+      enMapa = v.id;
+      mapa.filtrado(v.titulo, numeros().get(v.id));
+      const ub = ubicados(v), p = posicion(v);
+      mapa.verTodo = () => { if (ub.length) mapa.ajustar(recuerdosMapa([v]), ZOOM_ABRE - 1); else if (p) mapa.ajustar([p], ZOOM_ABRE - 1); };
+    }
+    if (viajeActual) return; /* en la página de un viaje, la página no cambia sola */
+    let fila = null;
+    if (tab === 'viajes' && v !== rec) {
+      const t = $('#ficha-' + v.id);
+      if (t && t !== fichaActual()) { desdeMapa = t; irFicha(t); }
+    } else if (tab === 'fotos' && v !== rec) fila = panel.querySelector('[data-pag="fotos"] a[href="#v/' + v.id + '"]');
+    else if (tab === 'rec' && m.p) fila = panel.querySelector('[data-pag="rec"] [data-rec="' + m.p.id + '"]');
+    panel.querySelectorAll('.aqui').forEach(e => e.classList.toggle('aqui', e === fila));
+    if (fila) { fila.classList.add('aqui'); verDentro(fila); }
+  };
+  /* Lleva una fila a la vista solo si su lista tiene su propio desplazamiento; nunca mueve la página entera
+     (en el móvil la lista va bajo el mapa, y desplazar la página mientras se pellizca el mapa sería un tirón) */
+  function verDentro(el) {
+    for (let c = el.parentElement; c && c !== document.body; c = c.parentElement) {
+      const st = getComputedStyle(c);
+      if (/(auto|scroll)/.test(st.overflowY) && c.scrollHeight > c.clientHeight + 4) {
+        const a = el.getBoundingClientRect(), b = c.getBoundingClientRect();
+        if (a.top < b.top + 8 || a.bottom > b.bottom - 8) c.scrollTo({ top: c.scrollTop + a.top - b.top - (b.height - a.height) / 2, behavior: menosMov.matches ? 'auto' : 'smooth' });
+        return;
+      }
+    }
+  }
   $('#m-logo').addEventListener('click', verTodosViajes); /* como el botón del planeta */
   function ventanaViaje(v) {
     const p = posicion(v), f = portada(v), n = conFoto(v).length;
@@ -1084,6 +1247,12 @@
     return filtro ? l.filter(v => anio(v) === filtro) : l;
   }
   function mapaInicio() {
+    if (!soloFav) {
+      const f = tab === 'viajes' && seguir && !arranque ? fichaActual() : null;
+      if (f && f.dataset.id) mapaViaje(porId(f.dataset.id), true);
+      else mapaTodos(datos, tocarViaje, false, false, enMapa === null && generalOn);
+      return;
+    }
     if (tab === 'rec') { mapaTodos([], tocarViaje, soloFav, true); return; }
     if (tab !== 'viajes') { mapaTodos(visFotos(), tocarViaje, soloFav); return; }
     const f = fichaActual();
@@ -1754,6 +1923,8 @@
       if (f === actual) return;
       actual = f;
       clearTimeout(tMapa);
+      /* si el carrusel va hacia la ficha que pidió el mapa, se ignoran las fichas por las que pasa (y la de llegada) */
+      if (desdeMapa) { if (f === desdeMapa) desdeMapa = null; return; }
       if (tab === 'viajes' && seguir) tMapa = setTimeout(() => { if (f.dataset.id) mapaViaje(porId(f.dataset.id), true); else mapaTodos(datos, tocarViaje, soloFav); }, 160);
     };
     pista.addEventListener('scroll', () => { if (!cola) cola = requestAnimationFrame(marcar); }, { passive: true });
@@ -1936,7 +2107,8 @@
       vFoco = document.activeElement;
       visor.hidden = false;
       document.documentElement.classList.add('bloq');
-      $('[data-v="cerrar"]', visor).focus();
+      /* el foco va a la ventana, no a la X: así la X no se queda iluminada al abrir (con Tab se llega a ella) */
+      visor.focus({ preventScroll: true });
     }
     vV = v; vP = p;
     if (v.recuerdos) secModo = 'rec';
@@ -1946,8 +2118,9 @@
     vImg.src = src(p.f);
     pintarFotosExtra(v, p);
     vImg.alt = nombrePunto(p) + ' · ' + v.titulo;
-    $('#visor-t').textContent = (secModo === 'rec' ? 'Recuerdos' : secModo === 'mosaico' ? 'Fotos' : v.titulo) + ' · ' + (n + 1) + ' / ' + sec.length +
-      (secModo === 'mosaico' ? ' · ' + v.titulo : '');
+    const numV = v !== rec ? numeros().get(v.id) : null;
+    $('#visor-t').innerHTML = (numV ? '<span class="v-num" aria-label="Viaje ' + numV + '">' + numV + '</span>' : '') +
+      '<span class="v-cont-t">' + esc((secModo === 'rec' ? 'Recuerdos' : secModo === 'mosaico' ? 'Fotos' : v.titulo) + ' · ' + (n + 1) + ' / ' + sec.length + (secModo === 'mosaico' ? ' · ' + v.titulo : '')) + '</span>';
     $('#visor-nombre').textContent = p.nombre || '';
     $('#visor-fecha').textContent = fechaTxt(p.fecha);
     $('#visor-txt').textContent = p.txt || '';
@@ -2116,8 +2289,9 @@
     caja.innerHTML = html;
     hoja.hidden = false;
     document.documentElement.classList.add('bloq');
-    const pri = $('input, button', caja);
-    if (pri) pri.focus();
+    /* si la hoja empieza con un campo para escribir, el foco va a él; si no, a la hoja (nunca a la X, que se quedaría iluminada) */
+    const pri = $('input:not([type="hidden"]), button', caja);
+    if (pri && pri.tagName === 'INPUT') pri.focus(); else hoja.focus({ preventScroll: true });
   }
   function ocultarHoja() {
     if (ed && ed.nueva) URL.revokeObjectURL(ed.nueva.url);

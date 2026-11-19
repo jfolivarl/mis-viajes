@@ -23,8 +23,8 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@400;500;700&amp;display=swap" rel="stylesheet">
-<link rel="stylesheet" href="leaflet.css?v=20261117V">
-<link rel="stylesheet" href="style.css?v=20261117V">
+<link rel="stylesheet" href="leaflet.css?v=20261119E">
+<link rel="stylesheet" href="style.css?v=20261119E">
 </head>
 <body>
 <svg class="sprite" aria-hidden="true" focusable="false">
@@ -100,7 +100,7 @@
   </div>
 </div>
 
-<div id="visor" class="visor" role="dialog" aria-modal="true" aria-labelledby="visor-t" hidden>
+<div id="visor" class="visor" role="dialog" aria-modal="true" aria-labelledby="visor-t" tabindex="-1" hidden>
   <div class="v-barra">
     <p id="visor-t" class="v-cont"></p>
     <button type="button" class="v-btn" data-v="zoom" aria-pressed="false" aria-label="Ampliar la foto"><svg class="ic" aria-hidden="true"><use href="#i-lupa"/></svg></button>
@@ -131,15 +131,15 @@
   </div>
 </div>
 
-<div id="hoja" class="hoja" role="dialog" aria-modal="true" aria-labelledby="hoja-t" hidden>
+<div id="hoja" class="hoja" role="dialog" aria-modal="true" aria-labelledby="hoja-t" tabindex="-1" hidden>
   <div class="h-caja" id="hoja-caja"></div>
 </div>
 
 <input id="fotos-in" class="oculto" type="file" accept="image/*" multiple aria-label="Elegir fotos">
 <div id="toast" class="toast" role="status" aria-live="polite" hidden></div>
 <noscript><p class="noscript">Mis viajes necesita JavaScript para funcionar.</p></noscript>
-<script src="leaflet.js?v=20261117V" defer></script>
-<script src="viajes.js?v=20261117V" defer></script>
-<script src="main.js?v=20261117V" defer></script>
+<script src="leaflet.js?v=20261119E" defer></script>
+<script src="viajes.js?v=20261119E" defer></script>
+<script src="main.js?v=20261119E" defer></script>
 </body>
 </html>

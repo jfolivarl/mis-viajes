@@ -195,8 +195,8 @@ window.VIAJES = [
     "id": "p2",
     "f": "burdeos-02.jpg",
     "fecha": "2025-12-21",
-    "lat": 44.8413,
-    "lng": -0.5716,
+    "lat": 44.8456,
+    "lng": -0.5756,
     "tramo": "Burdeos",
     "nombre": "Monumento a los Girondins",
     "txt": "La columna y la noria de Navidad en la Place des Quinconces"

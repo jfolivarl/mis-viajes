@@ -390,8 +390,8 @@
       ])
     };
     const NOMBRES = { azul: 'Azul', claro: 'Gris claro', calle: 'Callejero', relieve: 'Relieve', satelite: 'Satélite' };
-    /* al abrir la app, siempre el relieve; durante la visita se puede cambiar de capa */
-    let base = 'relieve';
+    /* al abrir la app, siempre el satélite; durante la visita se puede cambiar de capa */
+    let base = 'satelite';
     const ponerBase = k => {
       if (capas[base]) map.removeLayer(capas[base]);
       base = k;
